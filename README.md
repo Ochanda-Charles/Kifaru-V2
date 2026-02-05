@@ -14,35 +14,7 @@ The project follows a modern microservices-inspired architecture, separated into
 
 ### System Architecture Diagram
 
-```mermaid
-graph TD
-    subgraph Client_Services ["Client Services"]
-        FE["Frontend (Next.js)"]
-    end
-
-    subgraph Backend_Services ["Backend Services"]
-        API["Backend API (Express/Node)"]
-        BG["Background Services (Worker)"]
-    end
-
-    subgraph Data_Layer ["Data Layer"]
-        DB[("PostgreSQL")]
-    end
-
-    subgraph External_Services ["External Services"]
-        Swypt["Swypt Payment Gateway"]
-        Cloud["Cloudinary (Images)"]
-        Email["SMTP / Nodemailer"]
-    end
-
-    FE -->|HTTP Requests| API
-    FE -->|Checkout Flow| Swypt
-    API -->|Query/Update| DB
-    BG -->|Cron/Jobs| DB
-    API -->|Auth/Payments| Swypt
-    API -->|Uploads| Cloud
-    BG -->|Send Mails| Email
-```
+![System Architecture Diagram](https://mermaid.ink/img/Z3JhcGggVEQKICAgIHN1YmdyYXBoIENsaWVudF9TZXJ2aWNlcyBbIkNsaWVudCBTZXJ2aWNlcyJdCiAgICAgICAgRkVbIkZyb250ZW5kIChOZXh0LmpzKSJdCiAgICBlbmQKCiAgICBzdWJncmFwaCBCYWNrZW5kX1NlcnZpY2VzIFsiQmFja2VuZCBTZXJ2aWNlcyJdCiAgICAgICAgQVBJWyJCYWNrZW5kIEFQSSAoRXhwcmVzcy9Ob2RlKSJdCiAgICAgICAgQkdbIkJhY2tncm91bmQgU2VydmljZXMgKFdvcmtlcikiXQogICAgZW5kCgogICAgc3ViZ3JhcGggRGF0YV9MYXllciBbIkRhdGEgTGF5ZXIiXQogICAgICAgIERCWygiUG9zdGdyZVNRTCIpXQogICAgZW5kCgogICAgc3ViZ3JhcGggRXh0ZXJuYWxfU2VydmljZXMgWyJFeHRlcm5hbCBTZXJ2aWNlcyJdCiAgICAgICAgU3d5cHRbIlN3eXB0IFBheW1lbnQgR2F0ZXdheSJdCiAgICAgICAgQ2xvdWRbIkNsb3VkaW5hcnkgKEltYWdlcykiXQogICAgICAgIEVtYWlsWyJTTVRQIC8gTm9kZW1haWxlciJdCiAgICBlbmQKCiAgICBGRSAtLT58SFRUUCBSZXF1ZXN0c3wgQVBJCiAgICBGRSAtLT58Q2hlY2tvdXQgRmxvd3wgU3d5cHQKICAgIEFQSSAtLT58UXVlcnkvVXBkYXRlfCBEQgogICAgQkcgLS0+fENyb24vSm9ic3wgREIKICAgIEFQSSAtLT58QXV0aC9QYXltZW50c3wgU3d5cHQKICAgIEFQSSAtLT58VXBsb2Fkc3wgQ2xvdWQKICAgIEJHIC0tPnxTZW5kIE1haWxzfCBFbWFpbA==)
 
 ## 🔄 User & Data Flow
 
@@ -55,36 +27,7 @@ The typical flow for a merchant involves registration, dashboard access, and inv
 
 ### User Flow Diagram
 
-```mermaid
-sequenceDiagram
-    participant M as Merchant
-    participant FE as Frontend
-    participant API as Backend API
-    participant DB as Main Database
-
-    Note over M, DB: Merchant Onboarding Flow
-    M->>FE: Access Sign Up Page
-    FE->>API: POST /auth/register
-    API->>DB: Create User Record
-    API-->>FE: Success Response
-    FE-->>M: Redirect to Login
-
-    Note over M, DB: Dashboard Access
-    M->>FE: Enter Credentials
-    FE->>API: POST /auth/login
-    API->>DB: Validate User
-    DB-->>API: User Data
-    API-->>FE: Return JWT Token
-    FE->>FE: Store Token & Redirect to Dashboard
-
-    Note over M, DB: Stock Management
-    M->>FE: Adjust Stock Level
-    FE->>API: POST /inventory/adjust
-    API->>DB: Update Product Count & Create Movement Record
-    DB-->>API: Confirmation
-    API-->>FE: Updated Stock Data
-    FE-->>M: Show Success Notification
-```
+![User Flow Diagram](https://mermaid.ink/img/c2VxdWVuY2VEaWFncmFtCiAgICBwYXJ0aWNpcGFudCBNIGFzIE1lcmNoYW50CiAgICBwYXJ0aWNpcGFudCBGRSBhcyBGcm9udGVuZAogICAgcGFydGljaXBhbnQgQVBJIGFzIEJhY2tlbmQgQVBJCiAgICBwYXJ0aWNpcGFudCBEQiBhcyBNYWluIERhdGFiYXNlCgogICAgTm90ZSBvdmVyIE0sIERCOiBNZXJjaGFudCBPbmJvYXJkaW5nIEZsb3cKICAgIE0tPj5GRTogQWNjZXNzIFNpZ24gVXAgUGFnZQogICAgRkUtPj5BUEk6IFBPU1QgL2F1dGgvcmVnaXN0ZXIKICAgIEFQSS0+PkRCOiBDcmVhdGUgVXNlciBSZWNvcmQKICAgIEFQSS0tPj5GRTogU3VjY2VzcyBSZXNwb25zZQogICAgRkUtLT4+TTogUmVkaXJlY3QgdG8gTG9naW4KCiAgICBOb3RlIG92ZXIgTSwgREI6IERhc2hib2FyZCBBY2Nlc3MKICAgIE0tPj5GRTogRW50ZXIgQ3JlZGVudGlhbHMKICAgIEZFLT4+QVBJOiBQT1NUIC9hdXRoL2xvZ2luCiAgICBBUEktPj5EQjogVmFsaWRhdGUgVXNlcgogICAgREItLT4+QVBJOiBVc2VyIERhdGEKICAgIEFQSS0tPj5GRTogUmV0dXJuIEpXVCBUb2tlbgogICAgRkUtPj5GRTogU3RvcmUgVG9rZW4gJiBSZWRpcmVjdCB0byBEYXNoYm9hcmQKCiAgICBOb3RlIG92ZXIgTSwgREI6IFN0b2NrIE1hbmFnZW1lbnQKICAgIE0tPj5GRTogQWRqdXN0IFN0b2NrIExldmVsCiAgICBGRS0+PkFQSTogUE9TVCAvaW52ZW50b3J5L2FkanVzdAogICAgQVBJLT4+REI6IFVwZGF0ZSBQcm9kdWN0IENvdW50ICYgQ3JlYXRlIE1vdmVtZW50IFJlY29yZAogICAgREItLT4+QVBJOiBDb25maXJtYXRpb24KICAgIEFQSS0tPj5GRTogVXBkYXRlZCBTdG9jayBEYXRhCiAgICBGRS0tPj5NOiBTaG93IFN1Y2Nlc3MgTm90aWZpY2F0aW9u)
 
 ## 🛠 Technology Stack & Design Decisions
 
