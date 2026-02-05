@@ -1,0 +1,17 @@
+
+node_modules/
+.env
+coverage/
+.vscode/
+.DS_Store
+# Logs
+logs/
+# Build output
+build/
+next/
+.next-cache/
+# Dependency directories
+.next/cache/
+.next/server/
+.next/static/
+./next

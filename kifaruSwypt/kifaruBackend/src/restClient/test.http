@@ -1,0 +1,76 @@
+
+
+###Register User
+POST http://localhost:5050/signup
+Content-Type: application/json
+
+{
+  "merchantUserName": "Godwin",
+  "merchantEmail": "wijfred@gmail.com",
+  "password": "atopwudan"
+}
+
+###Login User
+POST http://localhost:5050/auth/login
+Content-Type: application/json
+
+{
+  "merchantEmail": "wijfred@gmail.com",
+  "password": "atopwudan"
+}
+
+
+
+###Add Product
+
+POST http://localhost:5050/AddProduct
+Content-Type: application/json
+
+{ "merchant_id": "bf089f9f-b96e-49f5-817c-67ca17d0b12f",
+    "name": "Velvet Kiss Liquid Lipstick",
+    "description": "One swipe, all-day confidence! This weightless liquid lipstick glides on like silk and stays put through coffee dates, work calls, and everything in between.",
+    "imageUrl": "https://i.ebayimg.com/images/g/zywAAOSw-o9lSgod/s-l1600.webp",
+    "price": 5,
+    "category": "Business Tools",
+    "quantity": 300
+}
+###Get All Products
+GET http://localhost:5050/getProducts
+Content-Type: application/json
+
+
+###Delete Product
+DELETE http://localhost:5050/deleteProduct/0970450a-9ceb-4c96-900a-1477161f8614
+
+
+###Update Product
+PUT http://localhost:5050/updateProduct/d7f981a5-ebf2-475d-9cb3-208dd6e91000
+Content-Type: application/json
+
+{
+  "name": "hello Business Suite",
+  "description": "A powerful tool for managing your business",
+  "imageUrl": "https://example.com/image.jpg",
+  "price": 19080,
+  "category": "Business Tools",
+  "quantity": 500
+}
+
+
+###post wallet
+POST http://localhost:5050/saveWallet
+Content-Type: application/json
+
+{
+  "merchant_id": "bf089f9f-b96e-49f5-817c-67ca17d0b12f",
+  "wallet_address": "0x1234567890abcdef1234567890abcdef12345678"
+}
+
+###Get Wallet by ID
+GET http://localhost:5050/getWallet/2db7a93c-0b57-4cb6-8386-12694fd8d7b2
+Content-Type: application/json
+
+
+### get products by merchant ID
+GET http://localhost:5050/getMerchantProducts/cf7932be-1d8a-4b84-814a-d873ae30b894
+Content-Type: application/json

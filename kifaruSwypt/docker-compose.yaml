@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  frontend:
+    image: godwin005/nextjs-frontend:latest
+    ports:
+      - "3500:3000"
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      - backend
+
+  backend:
+    image: godwin005/kifaru-backend:latest
+    ports:
+      - "4000:4000"
+    environment:
+      - NODE_ENV=production
+      - PORT=4000
