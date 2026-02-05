@@ -16,23 +16,23 @@ The project follows a modern microservices-inspired architecture, separated into
 
 ```mermaid
 graph TD
-    subgraph Client Services
-        FE[Frontend (Next.js)]
+    subgraph Client_Services ["Client Services"]
+        FE["Frontend (Next.js)"]
     end
 
-    subgraph Backend Services
-        API[Backend API (Express/Node)]
-        BG[Background Services (Worker)]
+    subgraph Backend_Services ["Backend Services"]
+        API["Backend API (Express/Node)"]
+        BG["Background Services (Worker)"]
     end
 
-    subgraph Data Layer
-        DB[(PostgreSQL)]
+    subgraph Data_Layer ["Data Layer"]
+        DB[("PostgreSQL")]
     end
 
-    subgraph External Services
-        Swypt[Swypt Payment Gateway]
-        Cloud[Cloudinary (Images)]
-        Email[SMTP / Nodemailer]
+    subgraph External_Services ["External Services"]
+        Swypt["Swypt Payment Gateway"]
+        Cloud["Cloudinary (Images)"]
+        Email["SMTP / Nodemailer"]
     end
 
     FE -->|HTTP Requests| API
@@ -125,35 +125,3 @@ sequenceDiagram
     docker-compose up --build
     ```
     *This will start the Frontend on port 3000 and the Backend on port 4000.*
-
----
-
-## 📤 Uploading to GitHub
-
-Follow these steps to upload this existing project to a new GitHub repository.
-
-1.  **Create a new Repository** on [GitHub.com](https://github.com/new). Do not initialize it with a README or .gitignore.
-2.  **Open your Terminal**/Command Prompt in the root folder of this project (`c:/Users/HP/OneDrive/Documents/Kifaru`).
-3.  **Initialize Git**:
-    ```bash
-    git init
-    ```
-4.  **Add all files**:
-    ```bash
-    git add .
-    ```
-5.  **Commit the Code**:
-    ```bash
-    git commit -m "Initial commit: Kifaru Swypt Project Structure"
-    ```
-6.  **Link to GitHub** (Replace `YOUR_USERNAME` and `REPO_NAME`):
-    ```bash
-    git remote add origin https://github.com/YOUR_USERNAME/REPO_NAME.git
-    ```
-7.  **Push to GitHub**:
-    ```bash
-    git branch -M main
-    git push -u origin main
-    ```
-
-> **Note**: Ensure you have a `.gitignore` file to prevent uploading large folders like `node_modules` or sensitive `.env` files.
