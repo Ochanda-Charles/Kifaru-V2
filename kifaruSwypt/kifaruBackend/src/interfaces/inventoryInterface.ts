@@ -14,7 +14,7 @@ export interface Category extends CategoryInput {
 export interface SupplierInput {
     merchant_id: string;
     name: string;
-    email?: string;
+    contact_email?: string;
     phone?: string;
     address?: string;
     is_active?: boolean;

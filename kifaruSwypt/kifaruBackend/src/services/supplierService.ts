@@ -4,9 +4,9 @@ import { Supplier, SupplierInput } from '../interfaces/inventoryInterface';
 export const supplierService = {
     createSupplier: async (merchantId: string, data: SupplierInput): Promise<Supplier> => {
         // Validate Email
-        if (data.email) {
+        if (data.contact_email) {
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRegex.test(data.email)) {
+            if (!emailRegex.test(data.contact_email)) {
                 throw new Error("Invalid email format.");
             }
         }

@@ -17,16 +17,20 @@ export const updateCategorySchema = Joi.object({
 // Supplier Validators
 export const createSupplierSchema = Joi.object({
     name: Joi.string().required(),
-    email: Joi.string().email().allow('', null),
+    contact_email: Joi.string().email().allow('', null),
     phone: Joi.string().allow('', null),
-    address: Joi.string().allow('', null)
+    address: Joi.string().allow('', null),
+    is_active: Joi.boolean(),
+    merchant_id: Joi.string()
 });
 
 export const updateSupplierSchema = Joi.object({
     name: Joi.string(),
-    email: Joi.string().email().allow('', null),
+    contact_email: Joi.string().email().allow('', null),
     phone: Joi.string().allow('', null),
-    address: Joi.string().allow('', null)
+    address: Joi.string().allow('', null),
+    is_active: Joi.boolean(),
+    merchant_id: Joi.string()
 });
 
 // Inventory Validators

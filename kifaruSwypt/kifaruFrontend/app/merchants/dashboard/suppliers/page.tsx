@@ -64,7 +64,12 @@ const SuppliersPage: React.FC = () => {
         setLoading(true);
         try {
             const response = await api.get("/inventory/suppliers");
-            setSuppliers(response.data.data);
+            // Backend returns is_active (boolean), frontend needs status (Active/Inactive)
+            const mappedSuppliers = response.data.data.map((s: any) => ({
+                ...s,
+                status: s.is_active ? "Active" : "Inactive"
+            }));
+            setSuppliers(mappedSuppliers);
         } catch (error) {
             console.error("Error fetching suppliers:", error);
             message.error("Failed to load suppliers.");
@@ -126,14 +131,17 @@ const SuppliersPage: React.FC = () => {
     const handleModalOk = async () => {
         try {
             const values = await form.validateFields();
-            const payload = { ...values, merchant_id };
+            const is_active = values.status === 'Active';
+            // Exclude status from payload, send is_active
+            const { status, ...rest } = values;
+            const payload = { ...rest, is_active, merchant_id };
 
             try {
                 if (editingSupplier) {
-                    await api.put(`/inventory/suppliers/${editingSupplier.id}`, values);
+                    await api.put(`/inventory/suppliers/${editingSupplier.id}`, payload);
                     message.success("Supplier updated successfully.");
                 } else {
-                    await api.post("/inventory/suppliers", values);
+                    await api.post("/inventory/suppliers", payload);
                     message.success("Supplier created successfully.");
                 }
                 setModalVisible(false);

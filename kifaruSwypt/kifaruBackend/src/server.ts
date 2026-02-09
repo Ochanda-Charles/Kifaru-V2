@@ -16,8 +16,8 @@ app.use(bodyParser.urlencoded({ extended: false }));
 app.use(express.urlencoded({ extended: true }));
 
 
-app.use(router);
-app.use(inventoryRoutes);
+app.use('/api', router);
+app.use('/api/inventory', inventoryRoutes);
 
 app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
     res.json({

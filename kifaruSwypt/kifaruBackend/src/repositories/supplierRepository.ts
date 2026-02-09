@@ -14,7 +14,7 @@ export const supplierRepository = {
             id,
             data.merchant_id,
             data.name,
-            data.email || null,
+            data.contact_email || null,
             data.phone || null,
             data.address || null,
             data.is_active !== undefined ? data.is_active : true
@@ -51,9 +51,9 @@ export const supplierRepository = {
             fields.push(`name = $${paramCount++}`);
             values.push(data.name);
         }
-        if (data.email !== undefined) {
+        if (data.contact_email !== undefined) {
             fields.push(`contact_email = $${paramCount++}`);
-            values.push(data.email);
+            values.push(data.contact_email);
         }
         if (data.phone !== undefined) {
             fields.push(`phone = $${paramCount++}`);
