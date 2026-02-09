@@ -66,13 +66,13 @@ export const signupUser = async (req: Request, res: Response) => {
 
 export const AddProduct = async (req: Request, res: Response) => {
   try {
-    const { name, merchant_id, description, imageUrl, price, quantity, walletAddressed } = req.body;
+    const { name, merchant_id, description, imageUrl, price, quantity, walletAddressed, category_id, supplier_id } = req.body;
     const id = v4();
 
     const data = await sqlConfig.query(
-      `INSERT INTO Products (id, merchant_id, imageUrl, name, description, quantity, price, walletAddressed)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [id, merchant_id, imageUrl, name, description, quantity, price, walletAddressed]
+      `INSERT INTO Products (id, merchant_id, imageUrl, name, description, quantity, price, walletAddressed, category_id, supplier_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [id, merchant_id, imageUrl, name, description, quantity, price, walletAddressed, category_id, supplier_id]
     );
 
     return res.status(200).json({ message: 'Product created successfully', rowsAffected: data.rowCount });
@@ -110,7 +110,13 @@ export const getProductsByMerchantID = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Merchant ID is required." });
     }
 
-    const query = `SELECT * FROM Products WHERE merchant_id = $1`;
+    const query = `
+      SELECT p.*, c.name as category_name, s.name as supplier_name 
+      FROM Products p
+      LEFT JOIN Categories c ON p.category_id = c.id
+      LEFT JOIN Suppliers s ON p.supplier_id = s.id
+      WHERE p.merchant_id = $1
+    `;
     const values = [id];
     const result = await sqlConfig.query(query, values);
 
@@ -134,7 +140,7 @@ export const getProductsByMerchantID = async (req: Request, res: Response) => {
 export const updateProduct = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { name, description, imageUrl, price, category, quantity } = req.body;
+    const { name, description, imageUrl, price, category_id, supplier_id, quantity } = req.body;
 
     const pool = await sqlConfig.connect();
     if (!pool) {
@@ -144,8 +150,8 @@ export const updateProduct = async (req: Request, res: Response) => {
     }
 
     const message = await pool.query(
-      `UPDATE Products SET name = $1, description = $2, imageUrl = $3, price = $4, category = $5, quantity = $6 WHERE id = $7`,
-      [name, description, imageUrl, price, category, quantity, id]
+      `UPDATE Products SET name = $1, description = $2, imageUrl = $3, price = $4, category_id = $5, supplier_id = $6, quantity = $7 WHERE id = $8`,
+      [name, description, imageUrl, price, category_id, supplier_id, quantity, id]
     );
 
     if (message.rowCount ?? 0 > 0) {

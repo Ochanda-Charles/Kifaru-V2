@@ -19,6 +19,8 @@ import {
   Col,
   Typography,
   Form,
+  Select,
+  Cascader,
 } from "antd";
 import {
   UploadOutlined,
@@ -45,6 +47,22 @@ type Product = {
   price: number;
   quantity: number;
   imageUrl: string;
+  category_name?: string;
+  supplier_name?: string;
+  category_id?: string;
+  supplier_id?: string;
+};
+
+type Category = {
+  id: string;
+  name: string;
+  parent_id?: string | null;
+  children?: Category[];
+};
+
+type Supplier = {
+  id: string;
+  name: string;
 };
 
 const MerchantDashboard: React.FC = () => {
@@ -56,12 +74,16 @@ const MerchantDashboard: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<any[]>([]); // Cascader options
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [form, setForm] = useState({
     name: "",
     price: 0,
     quantity: 0,
     imageFile: null as File | null,
     imagePreview: "",
+    category_id: "",
+    supplier_id: "",
   });
 
   const [antForm] = Form.useForm();
@@ -98,7 +120,7 @@ const MerchantDashboard: React.FC = () => {
   };
 
   const resetForm = () => {
-    setForm({ name: "", price: 0, quantity: 0, imageFile: null, imagePreview: "" });
+    setForm({ name: "", price: 0, quantity: 0, imageFile: null, imagePreview: "", category_id: "", supplier_id: "" });
   };
 
   const handleAddClick = () => {
@@ -107,21 +129,64 @@ const MerchantDashboard: React.FC = () => {
   };
 
   useEffect(() => {
-    const fetchmyProducts = async () => {
-
+    const fetchAllData = async () => {
       try {
-        const id = localStorage.getItem('merchant_id')
-        const response = await api.get(`/getMerchantProducts/${id}`);
+        const id = localStorage.getItem('merchant_id');
+        if (!id) return;
 
-        setProducts(response.data.data);
+        // 1. Fetch Products
+        const prodRes = await api.get(`/getMerchantProducts/${id}`);
+        setProducts(prodRes.data.data);
+
+        // 2. Fetch Categories
+        const catRes = await api.get('/categories'); // Assuming endpoint is /categories
+        const rawCats = catRes.data.data;
+        const catTree = buildCategoryTree(rawCats);
+        setCategories(catTree);
+
+        // 3. Fetch Suppliers
+        const supRes = await api.get('/suppliers'); // Assuming endpoint is /suppliers
+        setSuppliers(supRes.data.data);
+
       } catch (error) {
-        console.error("Error fetching products:", error);
-        message.error("Failed to load products.");
+        console.error("Error fetching dashboard data:", error);
+        // message.error("Failed to load dashboard data.");
       }
     };
 
-    fetchmyProducts();
+    fetchAllData();
   }, []);
+
+  const buildCategoryTree = (items: any[]) => {
+    const itemMap = new Map();
+    items.forEach(item => itemMap.set(item.id, { ...item, value: item.id, label: item.name, children: [] }));
+
+    const tree: any[] = [];
+    items.forEach(item => {
+      if (item.parent_id) {
+        const parent = itemMap.get(item.parent_id);
+        if (parent) {
+          parent.children.push(itemMap.get(item.id));
+        }
+      } else {
+        tree.push(itemMap.get(item.id));
+      }
+    });
+
+    // Clean up empty children arrays for Antd Cascader
+    const cleanTree = (nodes: any[]) => {
+      nodes.forEach(node => {
+        if (node.children.length === 0) {
+          delete node.children;
+        } else {
+          cleanTree(node.children);
+        }
+      });
+    };
+    cleanTree(tree);
+
+    return tree;
+  };
 
 
 
@@ -234,7 +299,9 @@ const MerchantDashboard: React.FC = () => {
         price,
         quantity,
         imageUrl,
-        walletAddressed
+        walletAddressed,
+        category_id: form.category_id,
+        supplier_id: form.supplier_id
       };
 
       const response = await api.post("/AddProduct", productPayload);
@@ -242,14 +309,9 @@ const MerchantDashboard: React.FC = () => {
       message.success("Product added successfully!");
       console.log("Server response:", response.data);
       setModalVisible(false);
-      setForm({
-        name: "",
-        price: 0,
-        quantity: 0,
-        imageFile: null,
-        imagePreview: "",
-      });
-      fetchmyProducts();
+      resetForm();
+      // fetchAllData(); // Ideally refresh everything
+      window.location.reload(); // Quick fix for now to refresh lists
     } catch (err) {
       if (err?.response) {
         message.error(`Server error: ${err.response.data.message || "Unknown error"}`);
@@ -355,6 +417,18 @@ const MerchantDashboard: React.FC = () => {
 
     },
     {
+      title: "Category",
+      dataIndex: "category_name",
+      key: "category",
+      render: (text: string) => text || "N/A",
+    },
+    {
+      title: "Supplier",
+      dataIndex: "supplier_name",
+      key: "supplier",
+      render: (text: string) => text || "N/A",
+    },
+    {
       title: "Quantity",
       dataIndex: "quantity",
       key: "quantity",
@@ -442,303 +516,198 @@ const MerchantDashboard: React.FC = () => {
 
 
   return (
-    <Layout
-      style={{
-        minHeight: "100vh",
-        background: "linear-gradient(to right, #D8B4FE, #C084FC, #A78BFA)",
-
-      }}
-    >
-      <Sider collapsible collapsed={collapsed} onCollapse={setCollapsed} theme="dark" style={{ position: "fixed", left: 20, top: 90, bottom: 20, borderRadius: 8, boxShadow: "0 2px 6px rgba(0,0,0,0.5)" }}>
-
-        <div
-          style={{
-            height: 64,
-            color: "white",
-            fontWeight: "bold",
-            fontSize: 18,
-            textAlign: "center",
-            marginTop: 25,
-            marginBottom: 20,
-
-          }}
-        >
-          {/* Merchant */}
-        </div>
-        <Menu
-          theme="dark"
-          defaultSelectedKeys={["dashboard"]}
-          mode="inline"
-          onClick={handleMenuClick}
-          className="spaced-menu"
-          items={[
-            { key: "dashboard", icon: <ShopOutlined />, label: "Dashboard" },
-            { key: "inventory", icon: <BarChartOutlined />, label: <Link href="/merchants/dashboard/inventory">Inventory</Link> },
-            { key: "categories", icon: <FolderOpenOutlined />, label: <Link href="/merchants/dashboard/categories">Categories</Link> },
-            { key: "reports", icon: <FileTextOutlined />, label: <Link href="/merchants/dashboard/reports">Reports</Link> },
-            { key: "suppliers", icon: <TeamOutlined />, label: <Link href="/merchants/dashboard/suppliers">Suppliers</Link> },
-            { key: "Clients", icon: <UserOutlined />, label: "Clients" },
-            { key: "my Wallet", icon: <DollarOutlined />, label: "My Wallet" },
-          ]}
-        />
-
-      </Sider>
-
-      <Layout>
-        {/* Fixed Navbar */}
-        <Header
-          style={{
-            position: "fixed",
-            top: 10,
-            left: 10,
-            right: 10,
-            zIndex: 100,
-            paddingLeft: 24,
-            padding: 24,
-            backgroundColor: "#111827", // Tailwind gray-900
-            boxShadow: "0 2px 6px rgba(0,0,0,0.6)",
-            height: 64,
-            display: "flex",
-            marginBottom: 20,
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <Title level={4} style={{ color: "white", margin: 30, userSelect: "none" }}>
-            Welcome, {merchantusername}
-          </Title>
-
-          <button
-            onClick={() => {
-              localStorage.removeItem("merchantToken");
-              localStorage.removeItem("your_wallet_address");
-              localStorage.removeItem("merchant_id")
-              axios.defaults.headers.common["Authorization"] = "";
-              window.location.href = "/";
-            }}
-            style={{
-              backgroundColor: "transparent",
-              border: "3px solid white",
-              color: "white",
-              marginRight: "30px",
-              padding: "2px",
-              borderRadius: 30,
-              cursor: "pointer",
-              maxHeight: 60,
-              marginTop: "10px",
-              minWidth: 120,
-              fontWeight: "bold",
-            }}
-          >
-            Logout
-          </button>
-        </Header>
-
-
-        {/* Below navbar: cards + add button row */}
-        <Content
-          style={{
-            marginTop: 130,
-            marginLeft: 250,
-            marginRight: 24,
-            marginBottom: 24,
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 20,
-              marginBottom: 24,
-              userSelect: "none",
-            }}
-          >
-            {/* Left: Cards */}
-            <div style={{ display: "flex", gap: 34, minWidth: 700 }}>
-              {[
-                { title: "View Transactions", icon: <DollarOutlined /> },
-                { title: "View Orders", icon: <ShopOutlined /> },
-                { key: "view-wallet", title: "View Wallet Address", icon: <UserOutlined /> },
-              ].map((card) => (
-                <div
-                  key={card.key || card.title}
-                  onClick={() => handleCardClick(card.key)}
-                  className="shadow-lg rounded-lg p-6 bg-white/10 backdrop-blur-md border border-white/20 cursor-pointer hover:bg-green-700 transition-colors flex items-center space-x-4"
-                  style={{ color: "black", flex: "0 0 250px", height: 150, }}
-                >
-
-                  <div
-                    style={{
-                      fontSize: 28,
-                      color: "limegreen",
-                      display: "flex",
-                      alignItems: "center",
-                    }}
-                  >
-                    {card.icon}
-                  </div>
-                  <div className="font-semibold text-lg">{card.title}</div>
-                </div>
-              ))}
-            </div>
-            {/* Wallet address display */}
-            <div style={{ marginTop: 10, marginLeft: 150, display: "flex", alignItems: "flex-start", backgroundColor: "rgba(255,255,255,0.05)", padding: 20, borderRadius: 8, boxShadow: "0 2px 6px rgba(0,0,0,0.5)" }}>
-              <span style={{ fontFamily: "monospace", fontWeight: "bold", fontSize: 16, marginTop: 10, }}>Copy Address:</span>
+    <>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 20,
+          marginBottom: 24,
+          userSelect: "none",
+        }}
+      >
+        {/* Left: Cards */}
+        <div style={{ display: "flex", gap: 24, flex: 1 }}>
+          {[
+            { title: "View Transactions", icon: <DollarOutlined /> },
+            { title: "View Orders", icon: <ShopOutlined /> },
+            { key: "view-wallet", title: "View Wallet Address", icon: <UserOutlined /> },
+          ].map((card) => (
+            <div
+              key={card.key || card.title}
+              onClick={() => handleCardClick(card.key)}
+              className="shadow-sm hover:shadow-md transition-all rounded-xl p-6 bg-white border border-gray-100 cursor-pointer flex items-center space-x-4 group"
+              style={{ flex: 1, minHeight: 120 }}
+            >
               <div
                 style={{
-
-                  minHeight: 80,
-                  minWidth: 160,
-                  marginLeft: 10,
+                  fontSize: 28,
+                  color: "#16a34a",
+                  backgroundColor: "#dcfce7",
+                  padding: 12,
+                  borderRadius: "50%",
                   display: "flex",
-                  fontFamily: "monospace",
-                  fontWeight: "bold",
-                  fontSize: 16,
                 }}
               >
-                <WalletAddressWithCopy address={savedWalletAddress} />
+                {card.icon}
+              </div>
+              <div className="font-semibold text-lg text-gray-700 group-hover:text-green-600 transition-colors">
+                {card.title}
               </div>
             </div>
+          ))}
+        </div>
 
-            {/* Right: Add Product button */}
-            <Button
-              size="large"
-              style={{
-                background: "#047857", // green-700
-                color: "white",
-                fontWeight: "600",
-                padding: "30px",
-                fontSize: 16,
-                borderRadius: 10,
-                boxShadow: "0 2px 6px rgba(4, 120, 87, 0.7)",
-                border: "none",
-                marginRight: 120,
-                transition: "transform 0.15s ease-in-out, box-shadow 0.15s ease-in-out",
-              }}
-              onClick={handleAddClick}
-              onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.05)")}
-              onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
-            >
-              Add Product
-            </Button>
+        {/* Right: Add Product button */}
+        <Button
+          size="large"
+          icon={<ShopOutlined />}
+          style={{
+            background: "#16a34a",
+            color: "white",
+            fontWeight: "600",
+            height: 60,
+            padding: "0 40px",
+            fontSize: 16,
+            borderRadius: 12,
+            border: "none",
+            boxShadow: "0 4px 6px -1px rgba(22, 163, 74, 0.4)",
+          }}
+          onClick={handleAddClick}
+        >
+          Add Product
+        </Button>
+      </div>
+
+      {/* Wallet address display (move to a cleaner spot or modal, but keeping here for now with better style) */}
+      <div style={{ marginBottom: 24, padding: 20, background: 'white', borderRadius: 12, border: '1px solid #f0f0f0', display: "flex", alignItems: "center", gap: 16 }}>
+        <span style={{ fontWeight: "bold", color: "#6b7280" }}>Your Wallet Address:</span>
+        <WalletAddressWithCopy address={savedWalletAddress} />
+      </div>
+
+      {/* Product Table */}
+      <div style={{ background: 'white', padding: 24, borderRadius: 16, border: '1px solid #f0f0f0' }}>
+        <Title level={4} style={{ marginTop: 0, marginBottom: 24 }}>Recent Products</Title>
+        <Table
+          dataSource={products}
+          columns={columns}
+          rowKey="id"
+          pagination={{ pageSize: 5 }}
+          style={{}}
+        />
+      </div>
+
+      {/* Add Product Modal */}
+      <Modal
+        title="Add New Product"
+        open={modalVisible}
+        onOk={handleOk}
+        onCancel={() => setModalVisible(false)}
+        maskClosable={false}
+        okButtonProps={{ style: { backgroundColor: '#16a34a', borderColor: '#16a34a' } }}
+        okText="Save Product"
+        width={800}
+      >
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginTop: 24 }}>
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <label className="block font-semibold mb-2">Product Name</label>
+            <Input
+              placeholder="Enter product name"
+              name="name"
+              value={form.name}
+              onChange={handleInputChange}
+            />
           </div>
 
-          {/* Product Table */}
-          <Table
-            dataSource={products}
-            columns={columns}
-            rowKey="id"
-            pagination={{ pageSize: 5 }}
-            style={{ backgroundColor: "rgba(255,255,255,0.05)", borderRadius: 8 }}
-            bordered={false}
-          />
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <label className="block font-semibold mb-2">Price (KSH.)</label>
+            <InputNumber
+              placeholder="Enter price"
+              value={form.price}
+              onChange={handlePriceChange}
+              min={0}
+              style={{ width: "100%" }}
+            />
+          </div>
 
-          {/* Add Product Modal */}
-          <Modal
-            title="Add New Product"
-            open={modalVisible}
-            onOk={handleOk}
-            onCancel={() => setModalVisible(false)}
-            maskClosable={false}  // Prevent closing on outside click
-            cancelButtonProps={{ style: { backgroundColor: 'red', color: 'white', border: 'none', fontSize: 20, padding: '22px', marginRight: 25 } }}
-            okButtonProps={{ style: { backgroundColor: '#047857', borderColor: '#047857', color: 'white', fontSize: 20, padding: '22px' } }}
-            okText="Save Product"
-            destroyOnHidden
-            width={800}
-            styles={{
-              body: {
-                minHeight: "320px",
-                overflowY: "auto",
-                padding: "24px 32px",
-              },
-            }}
-          >
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: 24,
-              }}
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <label className="block font-semibold mb-2">Stock/Quantity</label>
+            <InputNumber
+              placeholder="Enter quantity"
+              value={form.quantity}
+              onChange={handleStockChange}
+              min={0}
+              style={{ width: "100%" }}
+            />
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <label className="block font-semibold mb-2">Category</label>
+            <Cascader
+              options={categories}
+              placeholder="Select Category"
+              onChange={(value) => setForm((prev) => ({ ...prev, category_id: value ? String(value[value.length - 1]) : "" }))}
+              changeOnSelect
+              style={{ width: "100%" }}
+            />
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <label className="block font-semibold mb-2">Supplier</label>
+            <Select
+              placeholder="Select Supplier"
+              value={form.supplier_id || undefined}
+              onChange={(value) => setForm((prev) => ({ ...prev, supplier_id: value }))}
+              style={{ width: "100%" }}
             >
-              <div style={{ display: "flex", flexDirection: "column" }}>
-                <label className="block font-semibold mb-2">Product Name</label>
-                <Input
-                  placeholder="Enter product name"
-                  name="name"
-                  value={form.name}
-                  onChange={handleInputChange}
-                  style={{ height: 44, fontSize: 16, padding: "0 12px" }}
-                />
-              </div>
+              {suppliers.map(s => (
+                <Select.Option key={s.id} value={s.id}>{s.name}</Select.Option>
+              ))}
+            </Select>
+          </div>
 
-              <div style={{ display: "flex", flexDirection: "column" }}>
-                <label className="block font-semibold mb-2">Price (KSH.)</label>
-                <InputNumber
-                  placeholder="Enter price"
-                  value={form.price}
-                  onChange={handlePriceChange}
-                  min={0}
-                  style={{ width: "100%", height: 44, fontSize: 16 }}
-                />
-              </div>
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <label className="block font-semibold mb-2">Product Image</label>
+            <Upload
+              beforeUpload={beforeUpload}
+              showUploadList={false}
+              onChange={handleImageChange}
+              accept="image/*"
+            >
+              <Button icon={<UploadOutlined />}>Upload Product Image</Button>
+            </Upload>
+            {form.imagePreview && (
+              <img
+                src={form.imagePreview}
+                alt="Preview"
+                style={{
+                  marginTop: 16,
+                  height: 120,
+                  width: 120,
+                  objectFit: "cover",
+                  borderRadius: 8,
+                  border: "1px solid #e5e7eb",
+                }}
+              />
+            )}
+          </div>
+        </div>
+      </Modal>
 
-              <div style={{ display: "flex", flexDirection: "column" }}>
-                <label className="block font-semibold mb-2">Stock/Quantity</label>
-                <InputNumber
-                  placeholder="Enter quantity"
-                  value={form.quantity}
-                  onChange={handleStockChange}
-                  min={0}
-                  style={{ width: "100%", height: 44, fontSize: 16 }}
-                />
-              </div>
-
-              <div style={{ display: "flex", flexDirection: "column" }}>
-                <label className="block font-semibold mb-2">Product Image</label>
-                <Upload
-                  beforeUpload={beforeUpload}
-                  showUploadList={false}
-                  onChange={handleImageChange}
-                  accept="image/*"
-                >
-                  <Button icon={<UploadOutlined />} style={{ height: 44, fontSize: 16 }}>
-                    Upload Product Image
-                  </Button>
-                </Upload>
-                {form.imagePreview && (
-                  <img
-                    src={form.imagePreview}
-                    alt="Preview"
-                    style={{
-                      marginTop: 16,
-                      height: 120,
-                      width: 120,
-                      objectFit: "cover",
-                      borderRadius: 8,
-                      border: "1px solid #ccc",
-                    }}
-                  />
-                )}
-              </div>
-            </div>
-          </Modal>
-
-          <WalletSetupModal
-            visible={walletModalVisible}
-            merchant_id={merchant_id}
-            onClose={() => setWalletModalVisible(false)}
-            onSubmit={(address) => {
-              setSavedWalletAddress(address);
-              message.success("Wallet saved successfully!");
-              setWalletModalVisible(false);
-              localStorage.setItem('your_wallet_address', address);
-              console.log("Saved wallet:", address);
-            }}
-          />
-        </Content>
-      </Layout>
-    </Layout>
+      <WalletSetupModal
+        visible={walletModalVisible}
+        merchant_id={merchant_id}
+        onClose={() => setWalletModalVisible(false)}
+        onSubmit={(address) => {
+          setSavedWalletAddress(address);
+          message.success("Wallet saved successfully!");
+          setWalletModalVisible(false);
+          localStorage.setItem('your_wallet_address', address);
+          console.log("Saved wallet:", address);
+        }}
+      />
+    </>
   );
 };
 
