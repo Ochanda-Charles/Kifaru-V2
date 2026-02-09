@@ -1,115 +1,45 @@
 {
-  
   "name": "bgservices",
-  
   "version": "1.0.0",
-  
   "description": "",
-  
-  "main": "server.js",
-  
+  "main": "dist/server.js",
   "scripts": {
-  
-    
-  "test": "jest --watchAll",
-  
-    
-  "start:build": "tsc -w",
-  
-    
-  "start:run": "nodemon dist/server.js",
-  
-    
-  "start": "concurrently npm:start:*"
-  
+    "test": "jest --watchAll",
+    "start:build": "tsc -w",
+    "start:run": "nodemon dist/server.js",
+    "start": "concurrently pnpm:start:*"
   },
-  
   "dependencies": {
-  
-    
-  "@types/bcrypt": "^5.0.2",
-  
-    
-  "@types/ejs": "^3.1.5",
-  
-    
-  "@types/express": "^5.0.3",
-  
-    
-  "@types/jsonwebtoken": "^9.0.9",
-  
-    
-  "@types/node": "^24.0.1",
-  
-    
-  "@types/node-cron": "^3.0.11",
-  
-    
-  "@types/nodemailer": "^6.4.17",
-  
-    
-  "@types/pg": "^8.15.4",
-  
-    
-  "@types/uuid": "^10.0.0",
-  
-    
-  "bcrypt": "^6.0.0",
-  
-    
-  "cloudinary": "^2.6.1",
-  
-    
-  "concurrently": "^9.1.2",
-  
-    
-  "cors": "^2.8.5",
-  
-    
-  "dotenv": "^16.5.0",
-  
-    
-  "ejs": "^3.1.10",
-  
-    
-  "express": "^5.1.0",
-  
-    
-  "joi": "^17.13.3",
-  
-    
-  "jsonwebtoken": "^9.0.2",
-  
-    
-  "mssql": "^11.0.1",
-  
-    
-  "node-cron": "^4.1.0",
-  
-    
-  "nodemailer": "^7.0.3",
-  
-    
-  "nodemon": "^3.1.10",
-  
-    
-  "pg": "^8.16.0",
-  
-    
-  "types-joi": "^2.1.0",
-  
-    
-  "uuid": "^11.1.0"
-  
+    "@types/bcrypt": "^5.0.2",
+    "@types/ejs": "^3.1.5",
+    "@types/express": "^5.0.3",
+    "@types/jsonwebtoken": "^9.0.9",
+    "@types/node": "^24.0.1",
+    "@types/node-cron": "^3.0.11",
+    "@types/nodemailer": "^6.4.17",
+    "@types/pg": "^8.15.4",
+    "@types/uuid": "^10.0.0",
+    "bcrypt": "^6.0.0",
+    "cloudinary": "^2.6.1",
+    "concurrently": "^9.1.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "ejs": "^3.1.10",
+    "express": "^5.1.0",
+    "joi": "^17.13.3",
+    "jsonwebtoken": "^9.0.2",
+    "mssql": "^11.0.1",
+    "node-cron": "^4.1.0",
+    "nodemailer": "^7.0.3",
+    "nodemon": "^3.1.10",
+    "pg": "^8.16.0",
+    "types-joi": "^2.1.0",
+    "uuid": "^11.1.0"
   },
-  
   "devDependencies": {
-  
-    
-  "@types/cors": "^2.8.19",
-  
-    
-  "@types/mssql": "^9.1.7"
-  
+    "@types/cors": "^2.8.19",
+    "@types/mssql": "^9.1.7",
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.3"
   }
 }

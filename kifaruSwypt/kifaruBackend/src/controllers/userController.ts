@@ -66,13 +66,13 @@ export const signupUser = async (req: Request, res: Response) => {
 
 export const AddProduct = async (req: Request, res: Response) => {
   try {
-    const { name, merchant_id, description, imageUrl, price, category, quantity, walletAddressed } = req.body;
+    const { name, merchant_id, description, imageUrl, price, quantity, walletAddressed } = req.body;
     const id = v4();
 
     const data = await sqlConfig.query(
-      `INSERT INTO Products (id, merchant_id, imageUrl, name, description, category, quantity, price,walletAddressed)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-      [id, merchant_id, imageUrl, name, description, category, quantity, price, walletAddressed]
+      `INSERT INTO Products (id, merchant_id, imageUrl, name, description, quantity, price, walletAddressed)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [id, merchant_id, imageUrl, name, description, quantity, price, walletAddressed]
     );
 
     return res.status(200).json({ message: 'Product created successfully', rowsAffected: data.rowCount });

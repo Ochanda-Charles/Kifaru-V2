@@ -52,10 +52,14 @@ const LoginPage: React.FC = () => {
           // The api interceptor will automatically pick up the token for future calls
         }
 
-        await fetchWalletAddress();
+        // Fetch wallet address asynchronously - don't await blocking redirect
+        fetchWalletAddress();
+
+        openNotification("Redirecting to dashboard...", "success");
         router.push("/merchants/dashboard");
       }
     } catch (err: any) {
+      console.error("Login error:", err);
       const message = err.response?.data?.error || "Login failed.";
       setError(message);
       openNotification(message, "error");
