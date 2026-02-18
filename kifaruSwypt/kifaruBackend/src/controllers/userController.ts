@@ -4,6 +4,7 @@ import mssql from 'mssql';
 import { sqlConfig } from '../config/sqlConfig';
 import { Request, Response } from "express";
 import { v4 } from 'uuid';
+import { ExtendedUserRequest } from '../middlewares/VerifyToken';
 import bcrypt from 'bcrypt'
 
 
@@ -12,22 +13,20 @@ export const signupUser = async (req: Request, res: Response) => {
   try {
 
     const { merchantUserName, merchantEmail, password } = req.body;
-    const id = v4();
-    const hashPwd = await bcrypt.hash(password, 10);
-    // let {error} = registerUserValidator.validate(req.body) 
-    // if(error){
-    //     return res.status(404).json({
-    //         error: error.details[0].message
-    //     })
-    // }
+    console.log("Signup attempt for email:", merchantEmail);
 
     if (!password) {
       return res.status(400).json({
         error: "Password is required"
       });
     }
+
+    const id = v4();
+    const hashPwd = await bcrypt.hash(password, 10);
+
     const emailExists = await checkIfEmailExists(merchantEmail);
     if (emailExists) {
+      console.log("Email already exists:", merchantEmail);
       return res.status(400).json({
         error: 'Email is already registered',
       });
@@ -57,16 +56,22 @@ export const signupUser = async (req: Request, res: Response) => {
     const query = 'SELECT COUNT(*) FROM merchants WHERE email = $1';
     const values = [merchantEmail];
     const result = await sqlConfig.query(query, values);
-    return (result.rows[0].count) > 0;
+    return parseInt(result.rows[0].count) > 0;
   }
 
 };
 
 // ..................createProduct............................
 
-export const AddProduct = async (req: Request, res: Response) => {
+export const AddProduct = async (req: ExtendedUserRequest, res: Response) => {
   try {
-    const { name, merchant_id, description, imageUrl, price, quantity, walletAddressed, category_id, supplier_id } = req.body;
+    const { name, description, imageUrl, price, quantity, walletAddressed, category_id, supplier_id } = req.body;
+    const merchant_id = req.info?.merchant_id;
+
+    if (!merchant_id) {
+      return res.status(401).json({ error: "Unauthorized: Merchant ID not found in token." });
+    }
+
     const id = v4();
 
     const data = await sqlConfig.query(
@@ -85,18 +90,12 @@ export const AddProduct = async (req: Request, res: Response) => {
 //...............get Products...........................
 export const getProducts = async (req: Request, res: Response) => {
   try {
-    const pool = await sqlConfig.connect();
-    if (!pool) {
-      return res.status(500).json({
-        error: "Database connection failed"
-      });
-    }
-    const message = await pool.query('SELECT * FROM Products');
+    const result = await sqlConfig.query('SELECT * FROM Products');
     return res.json({
-      message: message.rows
+      message: result.rows
     });
   } catch (error) {
-    console.error("error can't get from the Table Product");
+    console.error("error can't get from the Table Product:", error);
     res.status(500).send('Server Error');
   }
 };
@@ -142,19 +141,12 @@ export const updateProduct = async (req: Request, res: Response) => {
     const { id } = req.params;
     const { name, description, imageUrl, price, category_id, supplier_id, quantity } = req.body;
 
-    const pool = await sqlConfig.connect();
-    if (!pool) {
-      return res.status(500).json({
-        error: "Database connection failed"
-      });
-    }
-
-    const message = await pool.query(
+    const result = await sqlConfig.query(
       `UPDATE Products SET name = $1, description = $2, imageUrl = $3, price = $4, category_id = $5, supplier_id = $6, quantity = $7 WHERE id = $8`,
       [name, description, imageUrl, price, category_id, supplier_id, quantity, id]
     );
 
-    if (message.rowCount ?? 0 > 0) {
+    if ((result.rowCount ?? 0) > 0) {
       return res.json({
         message: "Product updated successfully"
       });
@@ -173,14 +165,8 @@ export const updateProduct = async (req: Request, res: Response) => {
 export const deleteProduct = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const pool = await sqlConfig.connect();
-    if (!pool) {
-      return res.status(500).json({
-        error: "Database connection failed"
-      });
-    }
-    const message = await pool.query('DELETE FROM Products WHERE id = $1', [id]);
-    if (message.rowCount ?? 0 > 0) {
+    const result = await sqlConfig.query('DELETE FROM Products WHERE id = $1', [id]);
+    if ((result.rowCount ?? 0) > 0) {
       return res.json({
         message: "Product deleted successfully"
       });

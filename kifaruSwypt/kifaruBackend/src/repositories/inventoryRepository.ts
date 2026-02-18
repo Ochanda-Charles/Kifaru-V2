@@ -101,33 +101,24 @@ export const inventoryRepository = {
     },
 
     getInventorySummary: async (merchantId: string): Promise<InventorySummary> => {
-        // This is a complex aggregation. 
-        // Assumes Products table has merchant_id, quantity, price.
-        // Also checking InventoryAlerts for counts if needed, or calculating on fly.
+        const query = `
+            SELECT 
+                COUNT(*) as count, 
+                SUM(quantity * price) as value,
+                COUNT(CASE WHEN quantity <= 10 AND quantity > 0 THEN 1 END) as low_stock_count,
+                COUNT(CASE WHEN quantity = 0 THEN 1 END) as out_of_stock_count
+            FROM Products 
+            WHERE merchant_id = $1
+        `;
 
-        // Total Products
-        const productsRes = await sqlConfig.query(
-            'SELECT COUNT(*) as count, SUM(quantity * price) as value FROM Products WHERE merchant_id = $1',
-            [merchantId]
-        );
-
-        // Low Stock (using a hardcoded threshold or per-product setting if available, prompt says threshold arg in getLowStockProducts but not here explicitly, generic assumption < 10)
-        // Actually, let's assume a default threshold of 10 for summary
-        const lowStockRes = await sqlConfig.query(
-            'SELECT COUNT(*) as count FROM Products WHERE merchant_id = $1 AND quantity <= 10 AND quantity > 0',
-            [merchantId]
-        );
-
-        const outOfStockRes = await sqlConfig.query(
-            'SELECT COUNT(*) as count FROM Products WHERE merchant_id = $1 AND quantity = 0',
-            [merchantId]
-        );
+        const res = await sqlConfig.query(query, [merchantId]);
+        const row = res.rows[0];
 
         return {
-            total_products: parseInt(productsRes.rows[0].count),
-            total_stock_value: parseFloat(productsRes.rows[0].value || '0'),
-            low_stock_count: parseInt(lowStockRes.rows[0].count),
-            out_of_stock_count: parseInt(outOfStockRes.rows[0].count)
+            total_products: parseInt(row.count || '0'),
+            total_stock_value: parseFloat(row.value || '0'),
+            low_stock_count: parseInt(row.low_stock_count || '0'),
+            out_of_stock_count: parseInt(row.out_of_stock_count || '0')
         };
     },
 
@@ -204,6 +195,36 @@ export const inventoryRepository = {
 
         const result = await sqlConfig.query(query, values);
         return result.rows;
+    },
+
+    createProduct: async (product: any): Promise<any> => {
+        const query = `
+            INSERT INTO Products (
+                id, merchant_id, name, description, price, quantity, 
+                category_id, imageurl, sku, low_stock_threshold, 
+                bestseller, new
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            RETURNING *
+        `;
+
+        const values = [
+            product.id,
+            product.merchant_id,
+            product.name,
+            product.description,
+            product.price,
+            product.quantity,
+            product.category_id,
+            product.image_url, // Note: DB column is 'imageurl' based on migration check
+            product.sku,
+            product.low_stock_threshold,
+            product.bestseller,
+            product.new
+        ];
+
+        const result = await sqlConfig.query(query, values);
+        return result.rows[0];
     }
 };
 

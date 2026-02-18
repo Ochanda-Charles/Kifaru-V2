@@ -6,6 +6,7 @@ import { openNotification } from "../../utilis/notification";
 import { useRouter } from "next/navigation";
 import { jwtDecode } from "jwt-decode";
 import { Sparkles, Lock, Mail, Eye, EyeOff } from "lucide-react";
+import Link from "next/link";
 
 const LoginPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
@@ -56,7 +57,7 @@ const LoginPage: React.FC = () => {
         fetchWalletAddress();
 
         openNotification("Redirecting to dashboard...", "success");
-        router.push("/merchants/dashboard");
+        router.replace("/merchants/dashboard");
       }
     } catch (err: any) {
       console.error("Login error:", err);
@@ -168,21 +169,21 @@ const LoginPage: React.FC = () => {
           <div className="mt-8 text-center pt-6 border-t border-gray-100">
             <p className="text-gray-500 text-sm">
               Don&apos;t have a merchant account?{" "}
-              <a
+              <Link
                 href="/merchants/signUp"
                 className="text-green-600 font-bold hover:text-green-700 transition-colors"
               >
                 Sign up instead
-              </a>
+              </Link>
             </p>
           </div>
         </div>
 
         {/* Back to Home Link */}
         <div className="text-center mt-6">
-          <a href="/" className="text-gray-400 hover:text-gray-600 text-sm transition-colors">
+          <Link href="/" className="text-gray-400 hover:text-gray-600 text-sm transition-colors">
             ← Back to Kifaru Swypt Home
-          </a>
+          </Link>
         </div>
       </div>
     </div>

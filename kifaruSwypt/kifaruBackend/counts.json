@@ -1,0 +1,23 @@
+[
+  {
+    "merchant": "test-merchant",
+    "email": "test-1769768108885@example.com",
+    "categories": "43",
+    "suppliers": "3",
+    "id": "24133771-8fcd-4347-abdb-98c66c63699a"
+  },
+  {
+    "merchant": "charles",
+    "email": "ochanda.charles.16@gmail.com",
+    "categories": "39",
+    "suppliers": "0",
+    "id": "d946a45d-5649-47bb-8cf0-44dc50cb964b"
+  },
+  {
+    "merchant": "chalo",
+    "email": "charlesochanda16@gmail.com",
+    "categories": "39",
+    "suppliers": "0",
+    "id": "9e5f00c5-5ae6-4e13-80f5-7e74c5615506"
+  }
+]

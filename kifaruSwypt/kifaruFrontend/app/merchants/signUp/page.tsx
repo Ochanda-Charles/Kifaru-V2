@@ -5,6 +5,7 @@ import api from "@/app/utilis/api";
 import { openNotification } from "../../utilis/notification";
 import { useRouter } from "next/navigation";
 import { Sparkles, User, Mail, Lock, Eye, EyeOff } from "lucide-react";
+import Link from "next/link";
 
 const SignupPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
@@ -161,21 +162,21 @@ const SignupPage: React.FC = () => {
           <div className="mt-8 text-center pt-6 border-t border-gray-100">
             <p className="text-gray-500 text-sm">
               Already have an account?{" "}
-              <a
+              <Link
                 href="/merchants/login"
                 className="text-green-600 font-bold hover:text-green-700 transition-colors"
               >
                 Log in instead
-              </a>
+              </Link>
             </p>
           </div>
         </div>
 
         {/* Back to Home Link */}
         <div className="text-center mt-6">
-          <a href="/" className="text-gray-400 hover:text-gray-600 text-sm transition-colors">
+          <Link href="/" className="text-gray-400 hover:text-gray-600 text-sm transition-colors">
             ← Back to Kifaru Swypt Home
-          </a>
+          </Link>
         </div>
       </div>
     </div>

@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import axios from "axios";
 import api from "@/app/utilis/api";
 import {
     Layout,
@@ -45,17 +44,8 @@ const CategoriesPage: React.FC = () => {
     const [modalVisible, setModalVisible] = useState(false);
     const [editingCategory, setEditingCategory] = useState<Category | null>(null);
     const [form] = Form.useForm();
-    const [merchant_id, setMerchantId] = useState<string | null>(null);
 
     useEffect(() => {
-        // Initial setup similar to dashboard
-        const token = localStorage.getItem("merchantToken");
-        if (token) {
-            axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
-        }
-        const mId = localStorage.getItem("merchant_id");
-        setMerchantId(mId);
-
         fetchCategories();
     }, []);
 
@@ -107,7 +97,7 @@ const CategoriesPage: React.FC = () => {
     const handleModalOk = async () => {
         try {
             const values = await form.validateFields();
-            const payload = { ...values, merchant_id };
+            const payload = { ...values };
 
             if (editingCategory) {
                 await api.put(`/inventory/categories/${editingCategory.id}`, payload);

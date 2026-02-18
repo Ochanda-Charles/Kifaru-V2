@@ -1,7 +1,7 @@
-
-import {Router} from "express";
-import {  AddProduct, deleteProduct, getProducts, getProductsByMerchantID, getWalletById, savewallet, signupUser, updateProduct} from "../controllers/userController";
+import { Router } from "express";
+import { AddProduct, deleteProduct, getProducts, getProductsByMerchantID, getWalletById, savewallet, signupUser, updateProduct } from "../controllers/userController";
 import { loginUser } from "../auth/authLogin";
+import { verifyToken } from "../middlewares/VerifyToken";
 
 
 const router = Router();
@@ -13,12 +13,12 @@ const asyncHandler = (fn: any) => (req: any, res: any, next: any) => {
 
 router.post('/signup', asyncHandler(signupUser));
 router.post('/auth/login', asyncHandler(loginUser));
-router.post('/AddProduct', asyncHandler(AddProduct));
+router.post('/AddProduct', verifyToken, asyncHandler(AddProduct));
 router.get('/getProducts', asyncHandler(getProducts));
-router.get('/getMerchantProducts/:id', asyncHandler(getProductsByMerchantID))
-router.put('/updateProduct/:id', asyncHandler(updateProduct));
-router.delete('/deleteProduct/:id', asyncHandler(deleteProduct));
-router.post('/saveWallet',asyncHandler(savewallet));
-router.get('/getWallet/:id', asyncHandler(getWalletById));
+router.get('/getMerchantProducts/:id', verifyToken, asyncHandler(getProductsByMerchantID))
+router.put('/updateProduct/:id', verifyToken, asyncHandler(updateProduct));
+router.delete('/deleteProduct/:id', verifyToken, asyncHandler(deleteProduct));
+router.post('/saveWallet', verifyToken, asyncHandler(savewallet));
+router.get('/getWallet/:id', verifyToken, asyncHandler(getWalletById));
 
 export default router;

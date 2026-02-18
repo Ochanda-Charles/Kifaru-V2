@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import axios from "axios";
 import api from "@/app/utilis/api";
 import {
     Layout,
@@ -46,17 +45,9 @@ const SuppliersPage: React.FC = () => {
     const [modalVisible, setModalVisible] = useState(false);
     const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
     const [form] = Form.useForm();
-    const [merchant_id, setMerchantId] = useState<string | null>(null);
     const [filterStatus, setFilterStatus] = useState<"All" | "Active" | "Inactive">("All");
 
     useEffect(() => {
-        const token = localStorage.getItem("merchantToken");
-        if (token) {
-            axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
-        }
-        const mId = localStorage.getItem("merchant_id");
-        setMerchantId(mId);
-
         fetchSuppliers();
     }, []);
 
@@ -118,7 +109,7 @@ const SuppliersPage: React.FC = () => {
     const handleToggleStatus = async (supplier: Supplier) => {
         const newStatus = supplier.status === "Active" ? "Inactive" : "Active";
         try {
-            await api.put(`/inventory/suppliers/${supplier.id}`, { ...supplier, status: newStatus, merchant_id });
+            await api.put(`/inventory/suppliers/${supplier.id}`, { ...supplier, status: newStatus });
             message.success(`Supplier marked as ${newStatus}`);
             fetchSuppliers();
         } catch (error) {
@@ -134,12 +125,11 @@ const SuppliersPage: React.FC = () => {
             const is_active = values.status === 'Active';
             // Exclude status from payload, send is_active
             const { status, ...rest } = values;
-            const payload = { ...rest, is_active, merchant_id };
+            const payload = { ...rest, is_active };
 
             try {
                 if (editingSupplier) {
                     await api.put(`/inventory/suppliers/${editingSupplier.id}`, payload);
-                    message.success("Supplier updated successfully.");
                 } else {
                     await api.post("/inventory/suppliers", payload);
                     message.success("Supplier created successfully.");

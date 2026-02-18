@@ -7,6 +7,7 @@ export interface CategoryInput {
 
 export interface Category extends CategoryInput {
     id: string;
+    product_count?: number;
     created_at: Date;
     updated_at: Date;
 }

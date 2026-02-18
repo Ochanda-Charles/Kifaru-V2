@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { sqlConfig } from "../config/sqlConfig";
-const SECRET = 'Q45gt23crfe';
+const SECRET = process.env.JWT_SECRET || 'fallback-secret-for-development-only';
 
 export const loginUser = async (req: Request, res: Response) => {
     try {
@@ -30,7 +30,7 @@ export const loginUser = async (req: Request, res: Response) => {
         const { password_hash: ignoreThis, ...loginCredentials } = user;
 
         //Generate JWT token
-        const token = jwt.sign(loginCredentials, SECRET, { expiresIn: '3600s' });
+        const token = jwt.sign(loginCredentials, SECRET, { expiresIn: '7d' });
 
         return res.status(200).json({
             message: "Logged in successfully",

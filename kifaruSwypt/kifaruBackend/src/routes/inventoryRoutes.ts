@@ -22,6 +22,7 @@ import {
     markAlertRead,
     processCheckout
 } from '../controllers/inventoryController';
+import { createProduct } from '../controllers/productController';
 
 const router = Router();
 
@@ -44,6 +45,7 @@ router.put('/suppliers/:id', verifyToken, asyncHandler(updateSupplier));
 router.delete('/suppliers/:id', verifyToken, asyncHandler(deleteSupplier));
 
 // Inventory
+router.post('/products', verifyToken, asyncHandler(createProduct));
 router.post('/inventory/adjust', verifyToken, asyncHandler(adjustStock));
 router.get('/inventory/movements', verifyToken, asyncHandler(getMovements));
 router.get('/inventory/report', verifyToken, asyncHandler(getReport));

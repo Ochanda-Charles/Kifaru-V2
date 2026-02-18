@@ -34,6 +34,7 @@ import {
     InboxOutlined,
     ArrowUpOutlined,
     ArrowDownOutlined,
+    PlusOutlined
 } from "@ant-design/icons";
 import Link from "next/link";
 
@@ -131,16 +132,16 @@ const InventoryDashboard: React.FC = () => {
 
     const fetchSummary = async () => {
         try {
-            const response = await axios.get(
-                `https://kifaruswypt.onrender.com/inventory/report?type=summary&merchant_id=${merchantId}`
+            const response = await api.get(
+                `/inventory/report?type=summary&merchant_id=${merchantId}`
             );
             setSummary(response.data);
         } catch (error) {
             console.error("Error fetching summary:", error);
             // Fallback to calculating from products
             try {
-                const productsRes = await axios.get(
-                    `https://kifaruswypt.onrender.com/getMerchantProducts/${merchantId}`
+                const productsRes = await api.get(
+                    `/getMerchantProducts/${merchantId}`
                 );
                 const products = productsRes.data.data || [];
                 const calculated: SummaryData = {
@@ -159,8 +160,8 @@ const InventoryDashboard: React.FC = () => {
 
     const fetchMovements = async () => {
         try {
-            const response = await axios.get(
-                `https://kifaruswypt.onrender.com/inventory/movements?limit=10&merchant_id=${merchantId}`
+            const response = await api.get(
+                `/inventory/movements?limit=10&merchant_id=${merchantId}`
             );
             setMovements(response.data.data || []);
         } catch (error) {
@@ -171,8 +172,8 @@ const InventoryDashboard: React.FC = () => {
 
     const fetchAlerts = async () => {
         try {
-            const response = await axios.get(
-                `https://kifaruswypt.onrender.com/inventory/alerts?unread=true&merchant_id=${merchantId}`
+            const response = await api.get(
+                `/inventory/alerts?unread=true&merchant_id=${merchantId}`
             );
             setAlerts(response.data.data || []);
         } catch (error) {
@@ -183,8 +184,8 @@ const InventoryDashboard: React.FC = () => {
 
     const fetchTopProducts = async () => {
         try {
-            const productsRes = await axios.get(
-                `https://kifaruswypt.onrender.com/getMerchantProducts/${merchantId}`
+            const productsRes = await api.get(
+                `/getMerchantProducts/${merchantId}`
             );
             const products = productsRes.data.data || [];
             setTopProducts(products.sort((a: Product, b: Product) => b.quantity - a.quantity).slice(0, 10));
@@ -371,6 +372,21 @@ const InventoryDashboard: React.FC = () => {
                         }}
                     >
                         <div className="flex flex-wrap gap-4">
+                            <Link href="/merchants/dashboard/inventory/add">
+                                <Button
+                                    type="primary"
+                                    size="large"
+                                    icon={<PlusOutlined />}
+                                    style={{
+                                        background: "#7c3aed",
+                                        borderColor: "#7c3aed",
+                                        borderRadius: 8,
+                                        fontWeight: 600,
+                                    }}
+                                >
+                                    Add New Product
+                                </Button>
+                            </Link>
                             <Link href="/merchants/dashboard/inventory/adjust">
                                 <Button
                                     type="primary"

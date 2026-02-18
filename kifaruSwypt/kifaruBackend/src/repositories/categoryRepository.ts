@@ -16,9 +16,19 @@ export const categoryRepository = {
     },
 
     getCategoriesByMerchant: async (merchantId: string): Promise<Category[]> => {
-        const query = 'SELECT * FROM Categories WHERE merchant_id = $1 ORDER BY name ASC';
+        const query = `
+            SELECT c.*, COUNT(p.id) as product_count 
+            FROM Categories c 
+            LEFT JOIN Products p ON c.id = p.category_id 
+            WHERE c.merchant_id = $1 
+            GROUP BY c.id 
+            ORDER BY c.name ASC
+        `;
         const result = await sqlConfig.query(query, [merchantId]);
-        return result.rows;
+        return result.rows.map(row => ({
+            ...row,
+            product_count: parseInt(row.product_count)
+        }));
     },
 
     getCategoryById: async (id: string): Promise<Category | null> => {

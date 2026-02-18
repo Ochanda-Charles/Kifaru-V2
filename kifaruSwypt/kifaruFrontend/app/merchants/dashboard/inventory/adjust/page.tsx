@@ -8,6 +8,7 @@ import {
     Layout,
     Menu,
     Button,
+    Modal,
     Card,
     Row,
     Col,
@@ -72,33 +73,29 @@ const StockAdjustmentPage: React.FC = () => {
     // Initialize auth
     useEffect(() => {
         const token = localStorage.getItem("merchantToken");
-        if (token) {
-            axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
-            try {
-                const decoded: any = jwtDecode(token);
-                const user = decoded.merchantUserName || decoded.merchantusername || decoded.sub || "User";
-                const id = decoded.merchant_id || decoded.sub || null;
-                setMerchantUsername(user);
+        if (!token) return;
+
+        try {
+            const decoded: any = jwtDecode(token);
+            const user = decoded.merchantUserName || decoded.merchantusername || decoded.sub || "User";
+            const id = decoded.merchant_id || decoded.sub || null;
+            setMerchantUsername(user);
+
+            if (id) {
                 setMerchantId(id);
-            } catch (error) {
-                console.error("Token decode error:", error);
+                fetchProducts(id);
+                fetchSuppliers();
             }
+        } catch (error) {
+            console.error("Token decode error:", error);
         }
     }, []);
 
-    // Fetch products when merchantId is available
-    useEffect(() => {
-        if (merchantId) {
-            fetchProducts();
-            fetchSuppliers();
-        }
-    }, [merchantId]);
-
-    const fetchProducts = async () => {
+    const fetchProducts = async (mId: string) => {
         setLoading(true);
         try {
-            const response = await axios.get(
-                `https://kifaruswypt.onrender.com/getMerchantProducts/${merchantId}`
+            const response = await api.get(
+                `/getMerchantProducts/${mId}`
             );
             setProducts(response.data.data || []);
         } catch (error) {

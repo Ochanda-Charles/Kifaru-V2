@@ -21,6 +21,7 @@ import {
   Form,
   Select,
   Cascader,
+  Spin,
 } from "antd";
 import {
   UploadOutlined,
@@ -85,6 +86,7 @@ const MerchantDashboard: React.FC = () => {
     category_id: "",
     supplier_id: "",
   });
+  const [loading, setLoading] = useState(false);
 
   const [antForm] = Form.useForm();
 
@@ -129,33 +131,67 @@ const MerchantDashboard: React.FC = () => {
   };
 
   useEffect(() => {
-    const fetchAllData = async () => {
-      try {
-        const id = localStorage.getItem('merchant_id');
-        if (!id) return;
+    const token = localStorage.getItem("merchantToken");
+    if (!token) return;
 
-        // 1. Fetch Products
-        const prodRes = await api.get(`/getMerchantProducts/${id}`);
-        setProducts(prodRes.data.data);
+    try {
+      const decoded: any = jwtDecode(token);
+      const user = decoded.merchantUserName || decoded.merchantusername || decoded.sub || "User";
+      const mId = decoded.merchant_id || decoded.sub || null;
 
-        // 2. Fetch Categories
-        const catRes = await api.get('/categories'); // Assuming endpoint is /categories
-        const rawCats = catRes.data.data;
+      setMerchantUsername(user);
+      if (mId) {
+        setMerchantId(mId);
+        fetchAllData(mId);
+      }
+    } catch (error) {
+      console.error("Token decode error:", error);
+    }
+  }, []);
+
+  const fetchAllData = async (mId: string) => {
+    setLoading(true);
+    try {
+      const [prodRes, catRes, supRes] = await Promise.allSettled([
+        api.get(`/getMerchantProducts/${mId}`),
+        api.get('/inventory/categories'),
+        api.get('/inventory/suppliers')
+      ]);
+
+      // Handle Products
+      if (prodRes.status === 'fulfilled') {
+        setProducts(prodRes.value.data.data || []);
+      } else {
+        // If 404, it might just mean no products, which is fine
+        if (prodRes.reason?.response?.status !== 404) {
+          console.error("Error fetching products:", prodRes.reason);
+        } else {
+          setProducts([]);
+        }
+      }
+
+      // Handle Categories
+      if (catRes.status === 'fulfilled') {
+        const rawCats = catRes.value.data.data || [];
         const catTree = buildCategoryTree(rawCats);
         setCategories(catTree);
-
-        // 3. Fetch Suppliers
-        const supRes = await api.get('/suppliers'); // Assuming endpoint is /suppliers
-        setSuppliers(supRes.data.data);
-
-      } catch (error) {
-        console.error("Error fetching dashboard data:", error);
-        // message.error("Failed to load dashboard data.");
+      } else {
+        console.error("Error fetching categories:", catRes.reason);
       }
-    };
 
-    fetchAllData();
-  }, []);
+      // Handle Suppliers
+      if (supRes.status === 'fulfilled') {
+        setSuppliers(supRes.value.data.data || []);
+      } else {
+        console.error("Error fetching suppliers:", supRes.reason);
+      }
+
+    } catch (error) {
+      console.error("Error in fetchAllData:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const buildCategoryTree = (items: any[]) => {
     const itemMap = new Map();
@@ -257,9 +293,8 @@ const MerchantDashboard: React.FC = () => {
     try {
       const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
       const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
-      const apiKey = process.env.NEXT_PUBLIC_CLOUDINARY_API_KEY; // Add API key
 
-      if (!cloudName || !uploadPreset || !apiKey) {
+      if (!cloudName || !uploadPreset) {
         throw new Error("Cloudinary configuration is missing. Check environment variables.");
       }
 
@@ -267,13 +302,6 @@ const MerchantDashboard: React.FC = () => {
       const uploadData = new FormData();
       uploadData.append("file", imageFile);
       uploadData.append("upload_preset", uploadPreset);
-      uploadData.append("api_key", apiKey); // Required for unsigned uploads
-
-      console.log("Env vars:", {
-        cloudName: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
-        uploadPreset: process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET,
-        apiKey: process.env.NEXT_PUBLIC_CLOUDINARY_API_KEY,
-      });
       const cloudinaryRes = await fetch(
         `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
         {
@@ -376,6 +404,8 @@ const MerchantDashboard: React.FC = () => {
         quantity: product.quantity,
         imageFile: null,
         imagePreview: product.imageUrl,
+        category_id: product.category_id || "",
+        supplier_id: product.supplier_id || "",
       });
       antForm.setFieldsValue({
         id: product.id,
@@ -455,24 +485,6 @@ const MerchantDashboard: React.FC = () => {
   ];
 
 
-  useEffect(() => {
-    const token = localStorage.getItem("merchantToken");
-    if (token) {
-      axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
-
-      try {
-        const decoded: any = jwtDecode(token);
-        const user = decoded.merchantUserName || decoded.merchantusername || decoded.sub || "User";
-        const merchant_id = decoded.merchant_id || decoded.merchant_id || decoded.sub || "Unknown merchant_id";
-        setMerchantUsername(user);
-        setMerchantId(merchant_id);
-        console.log("Merchant ID:", merchant_id);
-        console.log("Decoded user:", user);
-      } catch (error) {
-        console.error("Token decode error:", error);
-      }
-    }
-  }, []);
 
   // Handle card clicks
   const handleCardClick = async (key: string) => {
@@ -589,13 +601,15 @@ const MerchantDashboard: React.FC = () => {
       {/* Product Table */}
       <div style={{ background: 'white', padding: 24, borderRadius: 16, border: '1px solid #f0f0f0' }}>
         <Title level={4} style={{ marginTop: 0, marginBottom: 24 }}>Recent Products</Title>
-        <Table
-          dataSource={products}
-          columns={columns}
-          rowKey="id"
-          pagination={{ pageSize: 5 }}
-          style={{}}
-        />
+        <Spin spinning={loading}>
+          <Table
+            dataSource={products}
+            columns={columns}
+            rowKey="id"
+            pagination={{ pageSize: 5 }}
+            style={{}}
+          />
+        </Spin>
       </div>
 
       {/* Add Product Modal */}

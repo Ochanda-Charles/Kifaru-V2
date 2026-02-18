@@ -14,7 +14,7 @@ export const adjustStock = async (req: ExtendedUserRequest, res: Response) => {
         }
 
         const { product_id, variant_id, movement_type, quantity, reason, supplier_id, reference_id } = value;
-        const performed_by = req.info?.user_id;
+        const performed_by = req.info?.merchant_id;
 
         // Calculate change based on movement type (IN/OUT) if quantity is absolute
         let change = quantity;
@@ -66,7 +66,7 @@ export const getReport = async (req: ExtendedUserRequest, res: Response) => {
             return res.status(400).json({ success: false, error: error.details[0].message });
         }
 
-        const merchant_id = req.info?.user_id;
+        const merchant_id = req.info?.merchant_id;
         if (!merchant_id) {
             return res.status(401).json({ success: false, error: 'Unauthorized' });
         }
@@ -104,7 +104,7 @@ export const getReport = async (req: ExtendedUserRequest, res: Response) => {
 
 export const getAlerts = async (req: ExtendedUserRequest, res: Response) => {
     try {
-        const merchant_id = req.info?.user_id;
+        const merchant_id = req.info?.merchant_id;
         if (!merchant_id) {
             return res.status(401).json({ success: false, error: 'Unauthorized' });
         }

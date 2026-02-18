@@ -10,7 +10,7 @@ export const createSupplier = async (req: ExtendedUserRequest, res: Response) =>
             return res.status(400).json({ success: false, error: error.details[0].message });
         }
 
-        const merchant_id = req.info?.user_id;
+        const merchant_id = req.info?.merchant_id;
         if (!merchant_id) {
             return res.status(401).json({ success: false, error: 'Unauthorized' });
         }
@@ -25,7 +25,7 @@ export const createSupplier = async (req: ExtendedUserRequest, res: Response) =>
 
 export const getSuppliers = async (req: ExtendedUserRequest, res: Response) => {
     try {
-        const merchant_id = req.info?.user_id;
+        const merchant_id = req.info?.merchant_id;
         if (!merchant_id) {
             return res.status(401).json({ success: false, error: 'Unauthorized' });
         }
