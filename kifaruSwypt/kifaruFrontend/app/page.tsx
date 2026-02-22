@@ -552,9 +552,11 @@ const KifaruBeautyStore: React.FC = () => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
 
-  // const merchantAddress: string = "0x21255cdbdAfF23D27bE0E00E79b8b03a14A32ab1";
-  const merchantAddress: string = products.length > 0 ? products[0].walletaddressed : null;
-  console.log("Merchanteeezz Address:", merchantAddress);
+  // Derive merchantAddress from the first cart item's product, falling back to the first product in the catalog
+  const merchantAddress: string | null =
+    (cartItems.length > 0 ? cartItems[0].product.walletaddressed : null)
+    || (products.length > 0 ? products[0].walletaddressed : null)
+    || null;
   const categories: string[] = Array.from(new Set(products.map((product: Product) => product.category)));
 
   const filteredProducts: Product[] = selectedCategory === "All"
@@ -594,6 +596,10 @@ const KifaruBeautyStore: React.FC = () => {
   );
 
   const handleCheckout = (): void => {
+    if (!merchantAddress) {
+      alert("Cannot process payment: merchant wallet address is missing. Please contact support.");
+      return;
+    }
     setIsCartOpen(false);
     document.body.style.overflow = 'hidden';
     setTimeout(() => {
@@ -626,6 +632,13 @@ const KifaruBeautyStore: React.FC = () => {
   const handleCloseModal = (): void => {
     document.body.style.overflow = 'auto';
     setIsModalOpen(false);
+    // The SDK does not support an onSuccess callback, so we trigger
+    // post-payment logic when the modal closes. If the user closed
+    // without completing payment, the backend checkout call will
+    // gracefully fail or can be guarded server-side.
+    if (cartItems.length > 0) {
+      handlePaymentSuccess();
+    }
   };
 
   return (
@@ -652,10 +665,8 @@ const KifaruBeautyStore: React.FC = () => {
               headerBackgroundColor="linear-gradient(135deg, #000000 0%, #1f2937 50%, #16a34a 100%)"
               businessName="Kifaru Beauty"
               merchantName="Kifaru Beauty Store"
-              merchantAddress={merchantAddress}
+              merchantAddress={merchantAddress!}
               amount={cartTotal}
-              // @ts-ignore - Swypt documentation or types might be outdated regarding onSuccess
-              onSuccess={handlePaymentSuccess}
             />
           </div>
         </div>

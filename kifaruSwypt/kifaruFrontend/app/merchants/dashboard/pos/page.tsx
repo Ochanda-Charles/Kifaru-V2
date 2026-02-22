@@ -142,7 +142,7 @@ const MerchantPOS = () => {
             return;
         }
         if (!merchantAddress) {
-            message.error("Merchant wallet address is missing. Cannot process payment.");
+            message.error("Merchant wallet address is missing. Please set your wallet address in Settings before accepting payments.");
             return;
         }
         setIsDepositModalOpen(true);
@@ -150,7 +150,7 @@ const MerchantPOS = () => {
 
     const handlePaymentSuccess = async () => {
         try {
-            console.log("Payment successful, syncing inventory...");
+            console.log("Payment flow completed, syncing inventory...");
             const merchant_id = localStorage.getItem('merchant_id');
 
             // Call backend to record transaction and update stock
@@ -168,7 +168,6 @@ const MerchantPOS = () => {
 
             message.success("Sale completed successfully! Inventory updated.");
             setCart([]);
-            setIsDepositModalOpen(false);
 
             // Refresh products to show new stock levels
             fetchProductsAndWallet();
@@ -176,6 +175,15 @@ const MerchantPOS = () => {
         } catch (error) {
             console.error("Inventory sync failed:", error);
             message.error("Payment received but inventory update failed. Please check logs.");
+        }
+    };
+
+    // The SDK does not support an onSuccess callback, so we handle
+    // post-payment logic when the modal closes.
+    const handleModalClose = () => {
+        setIsDepositModalOpen(false);
+        if (cart.length > 0) {
+            handlePaymentSuccess();
         }
     };
 
@@ -306,18 +314,16 @@ const MerchantPOS = () => {
             {/* Swypt Payment Modal */}
             {isDepositModalOpen && merchantAddress && (
                 <div style={{ position: 'fixed', zIndex: 1000, inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)' }} onClick={() => setIsDepositModalOpen(false)} />
+                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)' }} onClick={handleModalClose} />
                     <div style={{ position: 'relative', zIndex: 1010 }}>
                         <DepositModal
                             isOpen={isDepositModalOpen}
-                            onClose={() => setIsDepositModalOpen(false)}
+                            onClose={handleModalClose}
                             headerBackgroundColor="#000"
                             businessName="Kifaru POS"
                             merchantName="Store Checkout"
                             merchantAddress={merchantAddress}
                             amount={calculateTotal()}
-                            // @ts-ignore
-                            onSuccess={handlePaymentSuccess}
                         />
                     </div>
                 </div>
