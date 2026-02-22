@@ -1,10 +1,8 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import axios from "axios";
 import api from "@/app/utilis/api";
 import {
-  Layout,
   Card,
   Row,
   Col,
@@ -38,8 +36,6 @@ import {
 import {
   DownloadOutlined,
   PrinterOutlined,
-  ArrowUpOutlined,
-  ArrowDownOutlined,
   WarningOutlined,
   DollarOutlined,
   StockOutlined
@@ -47,36 +43,40 @@ import {
 import dayjs from "dayjs";
 import type { Dayjs } from "dayjs";
 
-const { Content } = Layout;
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
 const { Option } = Select;
 
-// --- Types ---
+// --- Types (aligned to backend API response) ---
 interface DashboardMetrics {
   totalProducts: number;
   totalStockUnits: number;
   totalInventoryValue: number;
   avgPrice: number;
+  lowStockCount: number;
+  outOfStockCount: number;
   stockByCategory: { name: string; value: number }[];
   topProductsByValue: { name: string; value: number }[];
   movementSummary: { in: number; out: number; net: number };
 }
 
 interface StockMovement {
-  date: string;
-  in: number;
-  out: number;
-  type: string;
+  id: string;
+  product_id: string;
+  quantity_change: number;
+  stock_before: number;
+  stock_after: number;
+  movement_type: string;
+  reason: string | null;
+  created_at: string;
 }
 
-interface LowStockItem {
-  id: number;
+interface LowStockProduct {
+  id: string;
   name: string;
-  currentStock: number;
-  threshold: number;
-  deficit: number;
-  lastRestocked: string;
+  quantity: number;
+  low_stock_threshold: number;
+  price: number;
 }
 
 interface ValuationData {
@@ -85,7 +85,6 @@ interface ValuationData {
   history: { date: string; value: number }[];
 }
 
-// --- Mock Data (Fallbacks) ---
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884d8", "#82ca9d"];
 
 const InventoryReportsPage: React.FC = () => {
@@ -98,58 +97,47 @@ const InventoryReportsPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [movements, setMovements] = useState<StockMovement[]>([]);
-  const [lowStockItems, setLowStockItems] = useState<LowStockItem[]>([]);
+  const [lowStockItems, setLowStockItems] = useState<LowStockProduct[]>([]);
   const [valuation, setValuation] = useState<ValuationData | null>(null);
 
-  // Helper to fetch data
   const fetchData = async () => {
     setLoading(true);
     try {
-      const merchant_id = localStorage.getItem("merchant_id");
       const startDate = dateRange[0].format("YYYY-MM-DD");
       const endDate = dateRange[1].format("YYYY-MM-DD");
 
-      const baseURL = "https://kifaruswypt.onrender.com";
-
-      // Fetch based on active tab
-      // Note: Assuming a versatile endpoint or separate endpoints. 
-      // Note: Assuming a versatile endpoint or separate endpoints.
-      // Using a generic structure as requested: GET /inventory/report?type={type}...
-
-      const params = {
+      const params: Record<string, string> = {
         type: activeTab,
         start_date: startDate,
         end_date: endDate,
-        merchant_id,
-        aggregation: aggregatedBy
       };
 
-      const response = await api.get("/inventory/report", { params }); // Using api utility and relative path
+      const response = await api.get("/inventory/report", { params });
 
       if (response.data?.success) {
         const data = response.data.data;
-        if (activeTab === "summary") setMetrics(data);
-        else if (activeTab === "movements") setMovements(data);
-        else if (activeTab === "low_stock") setLowStockItems(data);
-        else if (activeTab === "valuation") setValuation(data);
+        // Set data even if empty/null — the render functions handle empty states gracefully
+        if (activeTab === "summary") setMetrics(data || null);
+        else if (activeTab === "movements") setMovements(Array.isArray(data) ? data : []);
+        else if (activeTab === "low_stock") setLowStockItems(Array.isArray(data) ? data : []);
+        else if (activeTab === "valuation") setValuation(data || null);
       } else {
-        // Fallback/Mock logic if API returns empty or success:token issue
-        // DO NOT USE IN PRODUCTION - strictly for demo if API isn't ready
-        console.warn("Using mock data as API response was not successful or empty");
-        if (activeTab === "summary") loadMockSummary();
-        if (activeTab === "movements") loadMockMovements();
-        if (activeTab === "low_stock") loadMockLowStock();
-        if (activeTab === "valuation") loadMockValuation();
+        // API responded but success is false — reset to empty state, don't show error
+        if (activeTab === "summary") setMetrics(null);
+        else if (activeTab === "movements") setMovements([]);
+        else if (activeTab === "low_stock") setLowStockItems([]);
+        else if (activeTab === "valuation") setValuation(null);
       }
-
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching report data:", error);
-      // message.error("Failed to fetch report data.");
-      // Fallback to mocks on error for development demonstration
-      if (activeTab === "summary") loadMockSummary();
-      if (activeTab === "movements") loadMockMovements();
-      if (activeTab === "low_stock") loadMockLowStock();
-      if (activeTab === "valuation") loadMockValuation();
+      const status = error?.response?.status;
+      // Only show error for genuine server/network issues, not for empty data
+      if (status === 401) {
+        message.error("Session expired. Please log in again.");
+      } else if (status && status >= 500) {
+        message.error("Server error generating report. Please try again later.");
+      }
+      // For other errors (404, network), silently show empty state
     } finally {
       setLoading(false);
     }
@@ -159,70 +147,10 @@ const InventoryReportsPage: React.FC = () => {
     fetchData();
   }, [activeTab, dateRange, aggregatedBy]);
 
-  // --- Mocks ---
-  const loadMockSummary = () => {
-    setMetrics({
-      totalProducts: 45,
-      totalStockUnits: 1250,
-      totalInventoryValue: 450000,
-      avgPrice: 360,
-      stockByCategory: [
-        { name: "Electronics", value: 400 },
-        { name: "Clothing", value: 300 },
-        { name: "Home", value: 300 },
-        { name: "Books", value: 200 },
-      ],
-      topProductsByValue: [
-        { name: "Laptop X1", value: 120000 },
-        { name: "Phone Y2", value: 80000 },
-        { name: "Headphones Z", value: 40000 },
-        { name: "Smart Watch", value: 35000 },
-        { name: "Tablet A", value: 30000 },
-      ],
-      movementSummary: { in: 150, out: 120, net: 30 },
-    });
-  };
-
-  const loadMockMovements = () => {
-    const data = [];
-    for (let i = 0; i < 7; i++) {
-      data.push({
-        date: dayjs().subtract(6 - i, 'day').format('YYYY-MM-DD'),
-        in: Math.floor(Math.random() * 50),
-        out: Math.floor(Math.random() * 40),
-        type: 'Movement'
-      });
-    }
-    setMovements(data);
-  };
-
-  const loadMockLowStock = () => {
-    setLowStockItems([
-      { id: 1, name: "Wireless Mouse", currentStock: 2, threshold: 10, deficit: 8, lastRestocked: "2023-10-01" },
-      { id: 2, name: "USB Cable", currentStock: 5, threshold: 20, deficit: 15, lastRestocked: "2023-09-15" },
-      { id: 3, name: "Notebook", currentStock: 1, threshold: 5, deficit: 4, lastRestocked: "2023-11-20" },
-    ]);
-  };
-
-  const loadMockValuation = () => {
-    setValuation({
-      totalValue: 450000,
-      byCategory: [
-        { category: "Electronics", value: 250000, count: 15 },
-        { category: "Clothing", value: 100000, count: 20 },
-        { category: "Home", value: 100000, count: 10 },
-      ],
-      history: Array.from({ length: 12 }, (_, i) => ({
-        date: dayjs().subtract(11 - i, 'month').format('MMM YYYY'),
-        value: 400000 + Math.random() * 50000
-      }))
-    });
-  };
-
   // --- Renderers ---
 
   const renderSummary = () => {
-    if (!metrics) return <Empty description="No data availabe" />;
+    if (!metrics) return <Empty description="No summary data available" />;
     return (
       <>
         <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
@@ -251,39 +179,47 @@ const InventoryReportsPage: React.FC = () => {
         <Row gutter={[16, 16]}>
           <Col span={12}>
             <Card title="Stock by Category">
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={metrics.stockByCategory}
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={100}
-                    fill="#8884d8"
-                    dataKey="value"
-                    label
-                  >
-                    {metrics.stockByCategory.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
+              {metrics.stockByCategory.length > 0 ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={metrics.stockByCategory}
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={100}
+                      fill="#8884d8"
+                      dataKey="value"
+                      label
+                    >
+                      {metrics.stockByCategory.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <Empty description="No category data" />
+              )}
             </Card>
           </Col>
           <Col span={12}>
             <Card title="Top 5 Products by Value">
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={metrics.topProductsByValue} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis type="number" />
-                  <YAxis dataKey="name" type="category" width={100} />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="value" fill="#82ca9d" name="Value (KES)" />
-                </BarChart>
-              </ResponsiveContainer>
+              {metrics.topProductsByValue.length > 0 ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={metrics.topProductsByValue} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis type="number" />
+                    <YAxis dataKey="name" type="category" width={100} />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="value" fill="#82ca9d" name="Value (KES)" />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <Empty description="No product data" />
+              )}
             </Card>
           </Col>
         </Row>
@@ -291,78 +227,144 @@ const InventoryReportsPage: React.FC = () => {
     );
   };
 
-  const renderMovements = () => (
-    <Card title="Stock Movements Over Time" extra={
-      <Select value={aggregatedBy} onChange={setAggregatedBy} style={{ width: 120 }}>
-        <Option value="day">Daily</Option>
-        <Option value="week">Weekly</Option>
-        <Option value="month">Monthly</Option>
-      </Select>
-    }>
-      <ResponsiveContainer width="100%" height={400}>
-        <LineChart data={movements}>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="date" />
-          <YAxis />
-          <Tooltip />
-          <Legend />
-          <Line type="monotone" dataKey="in" stroke="#82ca9d" name="Stock In" />
-          <Line type="monotone" dataKey="out" stroke="#8884d8" name="Stock Out" />
-        </LineChart>
-      </ResponsiveContainer>
-    </Card>
-  );
+  const renderMovements = () => {
+    // Group raw movements by date for the chart
+    const grouped: Record<string, { in: number; out: number }> = {};
+    movements.forEach((m) => {
+      const date = dayjs(m.created_at).format("YYYY-MM-DD");
+      if (!grouped[date]) grouped[date] = { in: 0, out: 0 };
+      if (m.movement_type === "IN") {
+        grouped[date].in += Math.abs(m.quantity_change);
+      } else {
+        grouped[date].out += Math.abs(m.quantity_change);
+      }
+    });
+    const chartData = Object.entries(grouped)
+      .map(([date, vals]) => ({ date, ...vals }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    return (
+      <Card
+        title="Stock Movements Over Time"
+        extra={
+          <Select value={aggregatedBy} onChange={setAggregatedBy} style={{ width: 120 }}>
+            <Option value="day">Daily</Option>
+            <Option value="week">Weekly</Option>
+            <Option value="month">Monthly</Option>
+          </Select>
+        }
+      >
+        {chartData.length > 0 ? (
+          <ResponsiveContainer width="100%" height={400}>
+            <LineChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="date" />
+              <YAxis />
+              <Tooltip />
+              <Legend />
+              <Line type="monotone" dataKey="in" stroke="#82ca9d" name="Stock In" />
+              <Line type="monotone" dataKey="out" stroke="#8884d8" name="Stock Out" />
+            </LineChart>
+          </ResponsiveContainer>
+        ) : (
+          <Empty description="No movement data for this period" />
+        )}
+      </Card>
+    );
+  };
 
   const renderLowStock = () => {
     const columns = [
       { title: "Product", dataIndex: "name", key: "name" },
-      { title: "Current Stock", dataIndex: "currentStock", key: "currentStock" },
-      { title: "Threshold", dataIndex: "threshold", key: "threshold" },
-      { title: "Deficit", dataIndex: "deficit", key: "deficit", render: (val: number) => <Text type="danger">{val}</Text> },
-      { title: "Last Restocked", dataIndex: "lastRestocked", key: "lastRestocked" },
+      { title: "Current Stock", dataIndex: "quantity", key: "quantity" },
+      {
+        title: "Threshold",
+        dataIndex: "low_stock_threshold",
+        key: "low_stock_threshold",
+        render: (val: number | null) => val ?? 10,
+      },
+      {
+        title: "Deficit",
+        key: "deficit",
+        render: (_: any, record: LowStockProduct) => {
+          const threshold = record.low_stock_threshold ?? 10;
+          const deficit = threshold - record.quantity;
+          return deficit > 0 ? <Text type="danger">{deficit}</Text> : 0;
+        },
+      },
+      {
+        title: "Price",
+        dataIndex: "price",
+        key: "price",
+        render: (val: number) => `KES ${Number(val).toLocaleString()}`,
+      },
     ];
 
     return (
-      <Card title="Low Stock Report" extra={<Button type="primary">Restock All</Button>}>
-        <Table dataSource={lowStockItems} columns={columns} rowKey="id" pagination={{ pageSize: 10 }} />
+      <Card title="Low Stock Report">
+        <Table
+          dataSource={lowStockItems}
+          columns={columns}
+          rowKey="id"
+          pagination={{ pageSize: 10 }}
+          locale={{ emptyText: <Empty description="No low stock items" /> }}
+        />
       </Card>
     );
   };
 
   const renderValuation = () => {
-    if (!valuation) return <Empty />;
+    if (!valuation) return <Empty description="No valuation data available" />;
     return (
-      <Space direction="vertical" size="large" style={{ width: '100%' }}>
+      <Space direction="vertical" size="large" style={{ width: "100%" }}>
         <Card>
-          <Statistic title="Total Inventory Valuation" value={valuation.totalValue} prefix="KES" precision={2} valueStyle={{ color: '#3f8600' }} />
+          <Statistic
+            title="Total Inventory Valuation"
+            value={valuation.totalValue}
+            prefix="KES"
+            precision={2}
+            valueStyle={{ color: "#3f8600" }}
+          />
         </Card>
 
         <Row gutter={[16, 16]}>
           <Col span={12}>
             <Card title="Valuation by Category">
-              <Table
-                dataSource={valuation.byCategory}
-                rowKey="category"
-                pagination={false}
-                columns={[
-                  { title: "Category", dataIndex: "category" },
-                  { title: "Item Count", dataIndex: "count" },
-                  { title: "Value (KES)", dataIndex: "value", render: val => val.toLocaleString() }
-                ]}
-              />
+              {valuation.byCategory.length > 0 ? (
+                <Table
+                  dataSource={valuation.byCategory}
+                  rowKey="category"
+                  pagination={false}
+                  columns={[
+                    { title: "Category", dataIndex: "category" },
+                    { title: "Item Count", dataIndex: "count" },
+                    {
+                      title: "Value (KES)",
+                      dataIndex: "value",
+                      render: (val: number) => Number(val).toLocaleString(),
+                    },
+                  ]}
+                />
+              ) : (
+                <Empty description="No category valuation data" />
+              )}
             </Card>
           </Col>
           <Col span={12}>
             <Card title="Valuation History">
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={valuation.history}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="value" fill="#8884d8" name="Total Value" />
-                </BarChart>
-              </ResponsiveContainer>
+              {valuation.history.length > 0 ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={valuation.history}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" />
+                    <YAxis />
+                    <Tooltip />
+                    <Bar dataKey="value" fill="#8884d8" name="Total Value" />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <Empty description="No history data available yet" />
+              )}
             </Card>
           </Col>
         </Row>
@@ -370,10 +372,64 @@ const InventoryReportsPage: React.FC = () => {
     );
   };
 
-  const handleExport = (format: "csv" | "pdf") => {
-    message.success(`Exporting as ${format.toUpperCase()}...`);
-    // Implement actual export logic here 
-    // e.g. window.open('.../export?format=' + format)
+  const exportToCsv = () => {
+    let csvContent = "";
+    const timestamp = dayjs().format("YYYY-MM-DD");
+
+    if (activeTab === "summary" && metrics) {
+      csvContent += "Metric,Value\n";
+      csvContent += `Total Products,${metrics.totalProducts}\n`;
+      csvContent += `Total Stock Units,${metrics.totalStockUnits}\n`;
+      csvContent += `Total Inventory Value (KES),${metrics.totalInventoryValue}\n`;
+      csvContent += `Average Price (KES),${metrics.avgPrice}\n`;
+      csvContent += `Low Stock Count,${metrics.lowStockCount}\n`;
+      csvContent += `Out of Stock Count,${metrics.outOfStockCount}\n`;
+      csvContent += `Stock In,${metrics.movementSummary.in}\n`;
+      csvContent += `Stock Out,${metrics.movementSummary.out}\n`;
+      csvContent += `Net Movement,${metrics.movementSummary.net}\n`;
+      csvContent += "\nCategory,Stock Units\n";
+      metrics.stockByCategory.forEach(c => {
+        csvContent += `"${c.name}",${c.value}\n`;
+      });
+      csvContent += "\nTop Product,Value (KES)\n";
+      metrics.topProductsByValue.forEach(p => {
+        csvContent += `"${p.name}",${p.value}\n`;
+      });
+    } else if (activeTab === "movements" && movements.length > 0) {
+      csvContent += "Date,Type,Quantity Change,Stock Before,Stock After,Reason\n";
+      movements.forEach(m => {
+        csvContent += `${dayjs(m.created_at).format("YYYY-MM-DD HH:mm")},${m.movement_type},${m.quantity_change},${m.stock_before},${m.stock_after},"${m.reason || ""}"\n`;
+      });
+    } else if (activeTab === "low_stock" && lowStockItems.length > 0) {
+      csvContent += "Product,Current Stock,Threshold,Deficit,Price (KES)\n";
+      lowStockItems.forEach(item => {
+        const threshold = item.low_stock_threshold ?? 10;
+        const deficit = Math.max(0, threshold - item.quantity);
+        csvContent += `"${item.name}",${item.quantity},${threshold},${deficit},${item.price}\n`;
+      });
+    } else if (activeTab === "valuation" && valuation) {
+      csvContent += `Total Inventory Valuation (KES),${valuation.totalValue}\n\n`;
+      csvContent += "Category,Item Count,Value (KES)\n";
+      valuation.byCategory.forEach(c => {
+        csvContent += `"${c.category}",${c.count},${c.value}\n`;
+      });
+    } else {
+      message.warning("No data to export.");
+      return;
+    }
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `inventory_${activeTab}_report_${timestamp}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    message.success("CSV downloaded successfully.");
+  };
+
+  const exportToPdf = () => {
+    window.print();
   };
 
   return (
@@ -381,8 +437,8 @@ const InventoryReportsPage: React.FC = () => {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <Title level={2} style={{ margin: 0 }}>Inventory Reports</Title>
         <Space>
-          <Button icon={<DownloadOutlined />} onClick={() => handleExport('csv')}>Export CSV</Button>
-          <Button icon={<PrinterOutlined />} onClick={() => handleExport('pdf')}>Print PDF</Button>
+          <Button icon={<DownloadOutlined />} onClick={exportToCsv}>Export CSV</Button>
+          <Button icon={<PrinterOutlined />} onClick={exportToPdf}>Print PDF</Button>
         </Space>
       </div>
 
@@ -393,9 +449,9 @@ const InventoryReportsPage: React.FC = () => {
             if (dates && dates[0] && dates[1]) setDateRange([dates[0], dates[1]]);
           }}
           presets={[
-            { label: 'Last 7 Days', value: [dayjs().subtract(7, 'd'), dayjs()] },
-            { label: 'Last 30 Days', value: [dayjs().subtract(30, 'd'), dayjs()] },
-            { label: 'This Month', value: [dayjs().startOf('month'), dayjs().endOf('month')] },
+            { label: "Last 7 Days", value: [dayjs().subtract(7, "d"), dayjs()] },
+            { label: "Last 30 Days", value: [dayjs().subtract(30, "d"), dayjs()] },
+            { label: "This Month", value: [dayjs().startOf("month"), dayjs().endOf("month")] },
           ]}
         />
       </div>
@@ -408,23 +464,23 @@ const InventoryReportsPage: React.FC = () => {
           {
             key: "summary",
             label: "Summary Overview",
-            children: loading ? <Spin size="large" /> : renderSummary()
+            children: loading ? <Spin size="large" /> : renderSummary(),
           },
           {
             key: "movements",
             label: "Stock Movements",
-            children: loading ? <Spin size="large" /> : renderMovements()
+            children: loading ? <Spin size="large" /> : renderMovements(),
           },
           {
             key: "low_stock",
             label: <Space><WarningOutlined /> Low Stock</Space>,
-            children: loading ? <Spin size="large" /> : renderLowStock()
+            children: loading ? <Spin size="large" /> : renderLowStock(),
           },
           {
             key: "valuation",
             label: <Space><DollarOutlined /> Valuation</Space>,
-            children: loading ? <Spin size="large" /> : renderValuation()
-          }
+            children: loading ? <Spin size="large" /> : renderValuation(),
+          },
         ]}
       />
     </div>

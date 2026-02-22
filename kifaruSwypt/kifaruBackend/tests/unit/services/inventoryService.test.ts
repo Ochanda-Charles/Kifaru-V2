@@ -61,10 +61,15 @@ describe('InventoryService', () => {
     describe('generateInventoryReport', () => {
         it('should calculate correct summary totals', async () => {
             const mockSummary = {
-                total_products: 100,
-                total_stock_value: 5000,
-                low_stock_count: 5,
-                out_of_stock_count: 2
+                totalProducts: 100,
+                totalStockUnits: 500,
+                totalInventoryValue: 5000,
+                avgPrice: 50,
+                lowStockCount: 5,
+                outOfStockCount: 2,
+                stockByCategory: [{ name: 'Test', value: 500 }],
+                topProductsByValue: [{ name: 'Product A', value: 2000 }],
+                movementSummary: { in: 100, out: 50, net: 50 }
             };
             (inventoryRepository.getInventorySummary as jest.Mock).mockResolvedValue(mockSummary);
 

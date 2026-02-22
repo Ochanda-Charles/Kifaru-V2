@@ -54,7 +54,7 @@ export const getMovementsQuerySchema = Joi.object({
 });
 
 export const getReportQuerySchema = Joi.object({
-    type: Joi.string().valid('summary', 'movements', 'low_stock', 'value').required(),
+    type: Joi.string().valid('summary', 'movements', 'low_stock', 'value', 'valuation').required(),
     start_date: Joi.date().iso(),
     end_date: Joi.date().iso()
 });

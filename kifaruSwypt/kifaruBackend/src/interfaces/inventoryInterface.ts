@@ -57,10 +57,15 @@ export interface StockMovement extends StockMovementInput {
 }
 
 export interface InventorySummary {
-    total_products: number;
-    total_stock_value: number; // calculated if price is available
-    low_stock_count: number;
-    out_of_stock_count: number;
+    totalProducts: number;
+    totalStockUnits: number;
+    totalInventoryValue: number;
+    avgPrice: number;
+    lowStockCount: number;
+    outOfStockCount: number;
+    stockByCategory: { name: string; value: number }[];
+    topProductsByValue: { name: string; value: number }[];
+    movementSummary: { in: number; out: number; net: number };
 }
 
 export enum AlertType {

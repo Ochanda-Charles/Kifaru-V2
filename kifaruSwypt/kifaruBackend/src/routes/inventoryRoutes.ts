@@ -46,13 +46,13 @@ router.delete('/suppliers/:id', verifyToken, asyncHandler(deleteSupplier));
 
 // Inventory
 router.post('/products', verifyToken, asyncHandler(createProduct));
-router.post('/inventory/adjust', verifyToken, asyncHandler(adjustStock));
-router.get('/inventory/movements', verifyToken, asyncHandler(getMovements));
-router.get('/inventory/report', verifyToken, asyncHandler(getReport));
-router.get('/inventory/alerts', verifyToken, asyncHandler(getAlerts));
-router.put('/inventory/alerts/:id/read', verifyToken, asyncHandler(markAlertRead));
+router.post('/adjust', verifyToken, asyncHandler(adjustStock));
+router.get('/movements', verifyToken, asyncHandler(getMovements));
+router.get('/report', verifyToken, asyncHandler(getReport));
+router.get('/alerts', verifyToken, asyncHandler(getAlerts));
+router.put('/alerts/:id/read', verifyToken, asyncHandler(markAlertRead));
 
 // Public Checkout Endpoint
-router.post('/inventory/checkout', asyncHandler(processCheckout));
+router.post('/checkout', asyncHandler(processCheckout));
 
 export default router;

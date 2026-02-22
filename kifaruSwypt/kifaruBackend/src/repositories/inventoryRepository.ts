@@ -101,24 +101,66 @@ export const inventoryRepository = {
     },
 
     getInventorySummary: async (merchantId: string): Promise<InventorySummary> => {
-        const query = `
+        // 1. Basic product stats
+        const basicQuery = `
             SELECT 
                 COUNT(*) as count, 
-                SUM(quantity * price) as value,
+                COALESCE(SUM(quantity), 0) as total_units,
+                COALESCE(SUM(quantity * price), 0) as total_value,
+                COALESCE(AVG(price), 0) as avg_price,
                 COUNT(CASE WHEN quantity <= 10 AND quantity > 0 THEN 1 END) as low_stock_count,
                 COUNT(CASE WHEN quantity = 0 THEN 1 END) as out_of_stock_count
             FROM Products 
             WHERE merchant_id = $1
         `;
+        const basicRes = await sqlConfig.query(basicQuery, [merchantId]);
+        const basic = basicRes.rows[0];
 
-        const res = await sqlConfig.query(query, [merchantId]);
-        const row = res.rows[0];
+        // 2. Stock by category
+        const categoryQuery = `
+            SELECT COALESCE(c.name, 'Uncategorized') as name, COALESCE(SUM(p.quantity), 0)::int as value
+            FROM Products p
+            LEFT JOIN Categories c ON p.category_id = c.id
+            WHERE p.merchant_id = $1
+            GROUP BY c.name
+            ORDER BY value DESC
+        `;
+        const categoryRes = await sqlConfig.query(categoryQuery, [merchantId]);
+
+        // 3. Top 5 products by total value (quantity * price)
+        const topProductsQuery = `
+            SELECT name, (quantity * price)::numeric as value
+            FROM Products
+            WHERE merchant_id = $1
+            ORDER BY (quantity * price) DESC
+            LIMIT 5
+        `;
+        const topProductsRes = await sqlConfig.query(topProductsQuery, [merchantId]);
+
+        // 4. Movement summary (total in vs out)
+        const movementQuery = `
+            SELECT 
+                COALESCE(SUM(CASE WHEN sm.movement_type = 'IN' THEN sm.quantity_change ELSE 0 END), 0) as total_in,
+                COALESCE(SUM(CASE WHEN sm.movement_type IN ('OUT', 'SALE') THEN ABS(sm.quantity_change) ELSE 0 END), 0) as total_out
+            FROM StockMovements sm
+            JOIN Products p ON sm.product_id = p.id
+            WHERE p.merchant_id = $1
+        `;
+        const movementRes = await sqlConfig.query(movementQuery, [merchantId]);
+        const mov = movementRes.rows[0];
+        const totalIn = parseInt(mov.total_in || '0');
+        const totalOut = parseInt(mov.total_out || '0');
 
         return {
-            total_products: parseInt(row.count || '0'),
-            total_stock_value: parseFloat(row.value || '0'),
-            low_stock_count: parseInt(row.low_stock_count || '0'),
-            out_of_stock_count: parseInt(row.out_of_stock_count || '0')
+            totalProducts: parseInt(basic.count || '0'),
+            totalStockUnits: parseInt(basic.total_units || '0'),
+            totalInventoryValue: parseFloat(basic.total_value || '0'),
+            avgPrice: parseFloat(parseFloat(basic.avg_price || '0').toFixed(2)),
+            lowStockCount: parseInt(basic.low_stock_count || '0'),
+            outOfStockCount: parseInt(basic.out_of_stock_count || '0'),
+            stockByCategory: categoryRes.rows.map(r => ({ name: r.name, value: parseInt(r.value) })),
+            topProductsByValue: topProductsRes.rows.map(r => ({ name: r.name, value: parseFloat(r.value) })),
+            movementSummary: { in: totalIn, out: totalOut, net: totalIn - totalOut }
         };
     },
 

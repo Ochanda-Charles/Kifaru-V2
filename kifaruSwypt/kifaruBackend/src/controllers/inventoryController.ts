@@ -88,6 +88,7 @@ export const getReport = async (req: ExtendedUserRequest, res: Response) => {
                 });
                 break;
             case 'valuation':
+            case 'value':
                 data = await inventoryRepository.getInventoryValuation(merchant_id);
                 break;
             default:
