@@ -11,6 +11,9 @@ RUN npm install
 # Copy all source files
 COPY . .
 
+# Build TypeScript to JavaScript
+RUN npm run build
+
 # Expose port your backend listens on (e.g., 5000 or 8080)
 EXPOSE 5000
 
