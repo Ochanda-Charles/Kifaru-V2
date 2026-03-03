@@ -4,7 +4,6 @@
   "main": "index.js",
   "scripts": {
     "build": "tsc",
-    "postinstall": "npm run build",
     "start": "node dist/src/server.js",
     "dev": "concurrently npm:start:*",
     "start:build": "tsc -w",
