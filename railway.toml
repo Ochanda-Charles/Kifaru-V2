@@ -1,0 +1,6 @@
+[build]
+builder = "nixpacks"
+buildCommand = "cd kifaruSwypt/kifaruBackend && npm install && npm run build"
+
+[deploy]
+startCommand = "cd kifaruSwypt/kifaruBackend && npm start"

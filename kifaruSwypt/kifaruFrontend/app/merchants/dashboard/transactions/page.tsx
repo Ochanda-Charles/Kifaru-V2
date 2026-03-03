@@ -1,13 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useReducer, useEffect, useRef } from "react";
 import {
     Table,
     Tag,
     Card,
     Select,
     Typography,
-    message,
     Statistic,
     Row,
     Col,
@@ -27,6 +26,8 @@ import api from "@/app/utilis/api";
 
 const { Title, Text } = Typography;
 
+// ── Types ──────────────────────────────────────────────────────────────
+
 interface Transaction {
     id: string;
     merchant_id: string;
@@ -39,6 +40,7 @@ interface Transaction {
     };
     payment_metadata: {
         method?: string;
+        paymentMethod?: string;
         fonbnk_order_id?: string;
         fonbnk_webhook?: {
             orderId?: string;
@@ -63,74 +65,263 @@ interface PaginationInfo {
     totalPages: number;
 }
 
-const statusConfig = {
+interface SummaryInfo {
+    completedCount: number;
+    revenue: number;
+}
+
+// ── Reducer (single atomic state) ──────────────────────────────────────
+
+interface State {
+    transactions: Transaction[];
+    pagination: PaginationInfo;
+    summary: SummaryInfo;
+    tableLoading: boolean;
+    initialLoad: boolean;
+    statusFilter: string;
+    selectedTx: Transaction | null;
+}
+
+type Action =
+    | { type: "FETCH_START" }
+    | {
+        type: "FETCH_SUCCESS";
+        transactions: Transaction[];
+        pagination: PaginationInfo;
+        summary: SummaryInfo;
+    }
+    | { type: "FETCH_ERROR" }
+    | { type: "SET_FILTER"; status: string }
+    | { type: "SELECT_TX"; tx: Transaction | null };
+
+const initialState: State = {
+    transactions: [],
+    pagination: { page: 1, limit: 15, total: 0, totalPages: 0 },
+    summary: { completedCount: 0, revenue: 0 },
+    tableLoading: true,
+    initialLoad: true,
+    statusFilter: "ALL",
+    selectedTx: null,
+};
+
+function reducer(state: State, action: Action): State {
+    switch (action.type) {
+        case "FETCH_START":
+            return { ...state, tableLoading: true };
+        case "FETCH_SUCCESS":
+            return {
+                ...state,
+                transactions: action.transactions,
+                pagination: action.pagination,
+                summary: action.summary,
+                tableLoading: false,
+                initialLoad: false,
+            };
+        case "FETCH_ERROR":
+            return { ...state, tableLoading: false, initialLoad: false };
+        case "SET_FILTER":
+            return { ...state, statusFilter: action.status };
+        case "SELECT_TX":
+            return { ...state, selectedTx: action.tx };
+        default:
+            return state;
+    }
+}
+
+// ── Constants ──────────────────────────────────────────────────────────
+
+const STATUS_CONFIG = {
     COMPLETED: { color: "success", icon: <CheckCircleOutlined />, label: "Completed" },
     PENDING: { color: "warning", icon: <ClockCircleOutlined />, label: "Pending" },
     FAILED: { color: "error", icon: <CloseCircleOutlined />, label: "Failed" },
-};
+} as const;
+
+const FILTER_OPTIONS = [
+    { value: "ALL", label: "All Statuses" },
+    { value: "COMPLETED", label: "Completed" },
+    { value: "PENDING", label: "Pending" },
+    { value: "FAILED", label: "Failed" },
+];
+
+const PAGE_SIZE = 15;
+
+// ── Helpers ────────────────────────────────────────────────────────────
+
+function getCustomerPhone(tx: Transaction): string {
+    return (
+        tx.customer_details?.phone ||
+        tx.payment_metadata?.fonbnk_webhook?.customerPhone ||
+        "—"
+    );
+}
+
+function getPaymentMethod(tx: Transaction): string {
+    return (
+        tx.payment_metadata?.method ||
+        tx.payment_metadata?.paymentMethod ||
+        "M-Pesa"
+    );
+}
+
+function getFonbnkOrderId(tx: Transaction): string | undefined {
+    return (
+        tx.payment_metadata?.fonbnk_order_id ||
+        tx.payment_metadata?.fonbnk_webhook?.orderId
+    );
+}
+
+function getSummary(transactions: Transaction[]): SummaryInfo {
+    return transactions.reduce<SummaryInfo>(
+        (acc, tx) => {
+            if (tx.status !== "COMPLETED") {
+                return acc;
+            }
+
+            acc.completedCount += 1;
+            const amount = Number(tx.total_amount);
+            if (Number.isFinite(amount)) {
+                acc.revenue += amount;
+            }
+
+            return acc;
+        },
+        { completedCount: 0, revenue: 0 },
+    );
+}
+
+// ── Detail-row sub-component ───────────────────────────────────────────
+
+const DetailRow = React.memo(
+    ({ label, value, copyable }: { label: string; value: React.ReactNode; copyable?: boolean }) => (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <Text type="secondary" style={{ fontSize: 13 }}>{label}</Text>
+            {typeof value === "string" && copyable ? (
+                <Text copyable style={{ fontSize: 13, fontWeight: 500 }}>{value}</Text>
+            ) : (
+                <Text style={{ fontSize: 13, fontWeight: 500 }}>{value}</Text>
+            )}
+        </div>
+    ),
+);
+DetailRow.displayName = "DetailRow";
+
+// ── Summary cards sub-component (isolated from table loading) ──────────
+
+const SummaryCards = React.memo(
+    ({ total, completedCount, revenue }: { total: number; completedCount: number; revenue: number }) => (
+        <Row gutter={16} style={{ marginBottom: 24 }}>
+            <Col span={8}>
+                <Card size="small" style={{ borderRadius: 12 }}>
+                    <Statistic
+                        title="Total Transactions"
+                        value={total}
+                        prefix={<DollarOutlined />}
+                    />
+                </Card>
+            </Col>
+            <Col span={8}>
+                <Card size="small" style={{ borderRadius: 12 }}>
+                    <Statistic
+                        title="Completed (this page)"
+                        value={completedCount}
+                        prefix={<CheckCircleOutlined style={{ color: "#16a34a" }} />}
+                    />
+                </Card>
+            </Col>
+            <Col span={8}>
+                <Card size="small" style={{ borderRadius: 12 }}>
+                    <Statistic
+                        title="Revenue (this page)"
+                        value={revenue}
+                        precision={2}
+                        prefix="KES"
+                        valueStyle={{ color: "#16a34a" }}
+                    />
+                </Card>
+            </Col>
+        </Row>
+    ),
+);
+SummaryCards.displayName = "SummaryCards";
+
+// ── Page component ─────────────────────────────────────────────────────
 
 const TransactionsPage = () => {
-    const [transactions, setTransactions] = useState<Transaction[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [pagination, setPagination] = useState<PaginationInfo>({
-        page: 1,
-        limit: 15,
-        total: 0,
-        totalPages: 0,
-    });
-    const [statusFilter, setStatusFilter] = useState<string>("ALL");
-    const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
+    const [state, dispatch] = useReducer(reducer, initialState);
+    const abortRef = useRef<AbortController | null>(null);
     const hasFetched = useRef(false);
+    const requestIdRef = useRef(0);
 
-    const fetchTransactions = async (page = 1, status = "ALL") => {
-        setLoading(true);
+    const fetchTransactions = async (page: number, status: string) => {
+        abortRef.current?.abort();
+        const controller = new AbortController();
+        abortRef.current = controller;
+        const requestId = ++requestIdRef.current;
+
+        dispatch({ type: "FETCH_START" });
+
         try {
-            const params: Record<string, string | number> = { page, limit: 15 };
+            const params: Record<string, string | number> = { page, limit: PAGE_SIZE };
             if (status !== "ALL") params.status = status;
 
-            const res = await api.get("/inventory/transactions", { params });
+            const res = await api.get("/inventory/transactions", {
+                params,
+                signal: controller.signal,
+            });
+
+            if (requestId !== requestIdRef.current || controller.signal.aborted) return;
 
             if (res.data.success) {
-                setTransactions(res.data.data);
-                setPagination(res.data.pagination);
-            } else {
-                message.error(res.data.error || "Failed to load transactions");
+                const transactions: Transaction[] = Array.isArray(res.data.data) ? res.data.data : [];
+                const pagination: PaginationInfo = res.data.pagination ?? {
+                    page,
+                    limit: PAGE_SIZE,
+                    total: 0,
+                    totalPages: 0,
+                };
+
+                dispatch({
+                    type: "FETCH_SUCCESS",
+                    transactions,
+                    pagination,
+                    summary: getSummary(transactions),
+                });
             }
         } catch (err: any) {
+            if (err?.code === "ERR_CANCELED") return;
+            if (requestId !== requestIdRef.current || controller.signal.aborted) return;
             console.error("Error fetching transactions:", err);
-            message.error("Failed to load transactions");
-        } finally {
-            setLoading(false);
+            dispatch({ type: "FETCH_ERROR" });
         }
     };
 
     useEffect(() => {
-        if (hasFetched.current && statusFilter === "ALL") return;
+        // Guard against React Strict Mode double-mount
+        if (hasFetched.current) return;
         hasFetched.current = true;
-        fetchTransactions(1, statusFilter);
-    }, [statusFilter]);
+
+        fetchTransactions(1, "ALL");
+
+        return () => {
+            abortRef.current?.abort();
+        };
+    }, []);
+
+    // ── Derived values ─────────────────────────────────────────────────
+    const { transactions, pagination, summary, tableLoading, statusFilter, selectedTx } = state;
+
+    // ── Handlers ───────────────────────────────────────────────────────
+
+    const handleFilterChange = (val: string) => {
+        dispatch({ type: "SET_FILTER", status: val });
+        fetchTransactions(1, val);
+    };
 
     const handleTableChange = (pag: TablePaginationConfig) => {
         fetchTransactions(pag.current || 1, statusFilter);
     };
 
-    // Derive summary stats from pagination totals
-    const completedCount = transactions.filter(t => t.status === "COMPLETED").length;
-    const totalRevenue = transactions
-        .filter(t => t.status === "COMPLETED")
-        .reduce((sum, t) => sum + parseFloat(t.total_amount), 0);
-
-    const getCustomerPhone = (tx: Transaction): string => {
-        return tx.customer_details?.phone
-            || tx.payment_metadata?.fonbnk_webhook?.customerPhone
-            || "—";
-    };
-
-    const getPaymentMethod = (tx: Transaction): string => {
-        return tx.payment_metadata?.method
-            || tx.payment_metadata?.paymentMethod
-            || "M-Pesa";
-    };
+    // ── Table columns ──────────────────────────────────────────────────
 
     const columns: ColumnsType<Transaction> = [
         {
@@ -169,8 +360,8 @@ const TransactionsPage = () => {
             dataIndex: "status",
             key: "status",
             width: 130,
-            render: (status: keyof typeof statusConfig) => {
-                const config = statusConfig[status] || statusConfig.PENDING;
+            render: (status: keyof typeof STATUS_CONFIG) => {
+                const config = STATUS_CONFIG[status] || STATUS_CONFIG.PENDING;
                 return (
                     <Tag
                         color={config.color}
@@ -203,8 +394,7 @@ const TransactionsPage = () => {
             key: "fonbnk",
             width: 140,
             render: (_: any, record: Transaction) => {
-                const orderId = record.payment_metadata?.fonbnk_order_id
-                    || record.payment_metadata?.fonbnk_webhook?.orderId;
+                const orderId = getFonbnkOrderId(record);
                 return orderId ? (
                     <Tooltip title={orderId}>
                         <Text copyable={{ text: orderId }} style={{ fontSize: 12 }}>
@@ -224,12 +414,14 @@ const TransactionsPage = () => {
                 <Tooltip title="View details">
                     <InfoCircleOutlined
                         style={{ cursor: "pointer", color: "#16a34a", fontSize: 16 }}
-                        onClick={() => setSelectedTx(record)}
+                        onClick={() => dispatch({ type: "SELECT_TX", tx: record })}
                     />
                 </Tooltip>
             ),
         },
     ];
+
+    // ── Render ──────────────────────────────────────────────────────────
 
     return (
         <div>
@@ -241,49 +433,18 @@ const TransactionsPage = () => {
                 </div>
                 <Select
                     value={statusFilter}
-                    onChange={(val) => setStatusFilter(val)}
+                    onChange={handleFilterChange}
                     style={{ width: 160 }}
-                    options={[
-                        { value: "ALL", label: "All Statuses" },
-                        { value: "COMPLETED", label: "Completed" },
-                        { value: "PENDING", label: "Pending" },
-                        { value: "FAILED", label: "Failed" },
-                    ]}
+                    options={FILTER_OPTIONS}
                 />
             </div>
 
-            {/* Summary cards */}
-            <Row gutter={16} style={{ marginBottom: 24 }}>
-                <Col span={8}>
-                    <Card size="small" style={{ borderRadius: 12 }}>
-                        <Statistic
-                            title="Total Transactions"
-                            value={pagination.total}
-                            prefix={<DollarOutlined />}
-                        />
-                    </Card>
-                </Col>
-                <Col span={8}>
-                    <Card size="small" style={{ borderRadius: 12 }}>
-                        <Statistic
-                            title="Completed (this page)"
-                            value={completedCount}
-                            prefix={<CheckCircleOutlined style={{ color: "#16a34a" }} />}
-                        />
-                    </Card>
-                </Col>
-                <Col span={8}>
-                    <Card size="small" style={{ borderRadius: 12 }}>
-                        <Statistic
-                            title="Revenue (this page)"
-                            value={totalRevenue}
-                            precision={2}
-                            prefix="KES"
-                            valueStyle={{ color: "#16a34a" }}
-                        />
-                    </Card>
-                </Col>
-            </Row>
+            {/* Summary cards — isolated component, only re-renders when props change */}
+            <SummaryCards
+                total={pagination.total}
+                completedCount={summary.completedCount}
+                revenue={summary.revenue}
+            />
 
             {/* Table */}
             <Card style={{ borderRadius: 12 }} bodyStyle={{ padding: 0 }}>
@@ -291,7 +452,7 @@ const TransactionsPage = () => {
                     columns={columns}
                     dataSource={transactions}
                     rowKey="id"
-                    loading={loading}
+                    loading={tableLoading}
                     pagination={{
                         current: pagination.page,
                         pageSize: pagination.limit,
@@ -322,7 +483,7 @@ const TransactionsPage = () => {
             <Modal
                 title="Transaction Details"
                 open={!!selectedTx}
-                onCancel={() => setSelectedTx(null)}
+                onCancel={() => dispatch({ type: "SELECT_TX", tx: null })}
                 footer={null}
                 width={520}
             >
@@ -337,10 +498,10 @@ const TransactionsPage = () => {
                             label="Status"
                             value={
                                 <Tag
-                                    color={statusConfig[selectedTx.status]?.color}
-                                    icon={statusConfig[selectedTx.status]?.icon}
+                                    color={STATUS_CONFIG[selectedTx.status]?.color}
+                                    icon={STATUS_CONFIG[selectedTx.status]?.icon}
                                 >
-                                    {statusConfig[selectedTx.status]?.label}
+                                    {STATUS_CONFIG[selectedTx.status]?.label}
                                 </Tag>
                             }
                         />
@@ -391,25 +552,5 @@ const TransactionsPage = () => {
         </div>
     );
 };
-
-// Helper component for detail rows
-const DetailRow = ({
-    label,
-    value,
-    copyable,
-}: {
-    label: string;
-    value: React.ReactNode;
-    copyable?: boolean;
-}) => (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <Text type="secondary" style={{ fontSize: 13 }}>{label}</Text>
-        {typeof value === "string" && copyable ? (
-            <Text copyable style={{ fontSize: 13, fontWeight: 500 }}>{value}</Text>
-        ) : (
-            <Text style={{ fontSize: 13, fontWeight: 500 }}>{value}</Text>
-        )}
-    </div>
-);
 
 export default TransactionsPage;

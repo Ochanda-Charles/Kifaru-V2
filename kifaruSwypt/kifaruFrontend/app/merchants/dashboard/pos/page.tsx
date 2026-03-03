@@ -50,6 +50,7 @@ const MerchantPOS = () => {
     const [cart, setCart] = useState<CartItem[]>([]);
     const [loading, setLoading] = useState(false);
     const [merchantAddress, setMerchantAddress] = useState<string | null>(null);
+    const [merchantId, setMerchantId] = useState<string>('');
 
     // Modal state
     const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
@@ -62,6 +63,7 @@ const MerchantPOS = () => {
         setLoading(true);
         try {
             const merchant_id = localStorage.getItem('merchant_id');
+            if (merchant_id) setMerchantId(merchant_id);
             if (!merchant_id) {
                 message.error("Merchant ID not found. Please login again.");
                 return;
@@ -309,7 +311,7 @@ const MerchantPOS = () => {
                 onSuccess={handlePaymentSuccess}
                 amount={calculateTotal()}
                 merchantAddress={merchantAddress || ''}
-                merchantId={localStorage.getItem('merchant_id') || ''}
+                merchantId={merchantId}
                 businessName="Kifaru POS"
             />
 
