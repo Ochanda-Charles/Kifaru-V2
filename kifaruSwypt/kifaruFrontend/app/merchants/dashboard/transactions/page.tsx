@@ -7,6 +7,7 @@ import {
     Card,
     Select,
     Typography,
+    message,
     Statistic,
     Row,
     Col,
@@ -291,6 +292,15 @@ const TransactionsPage = () => {
             if (err?.code === "ERR_CANCELED") return;
             if (requestId !== requestIdRef.current || controller.signal.aborted) return;
             console.error("Error fetching transactions:", err);
+            const status = err?.response?.status;
+            const errMsg = err?.response?.data?.error;
+            if (status === 401) {
+                message.error("Session expired. Please log in again.");
+            } else if (errMsg) {
+                message.error(errMsg);
+            } else {
+                message.error("Failed to load transactions.");
+            }
             dispatch({ type: "FETCH_ERROR" });
         }
     };

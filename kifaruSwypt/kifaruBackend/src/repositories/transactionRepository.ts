@@ -58,30 +58,45 @@ export const transactionRepository = {
         status?: string
     ): Promise<Transaction[]> => {
         let query = `
-            SELECT * FROM Transactions
-            WHERE merchant_id = $1
+            SELECT DISTINCT t.*
+            FROM Transactions t
+            LEFT JOIN StockMovements sm ON sm.reference_id = t.id::text
+            LEFT JOIN Products p ON p.id = sm.product_id
+            WHERE (
+                t.merchant_id = $1
+                OR (t.merchant_id IS NULL AND p.merchant_id = $1)
+            )
         `;
         const values: any[] = [merchant_id];
 
         if (status && ['PENDING', 'COMPLETED', 'FAILED'].includes(status)) {
             values.push(status);
-            query += ` AND status = $${values.length}`;
+            query += ` AND t.status = $${values.length}`;
         }
 
         values.push(limit, offset);
-        query += ` ORDER BY created_at DESC LIMIT $${values.length - 1} OFFSET $${values.length}`;
+        query += ` ORDER BY t.created_at DESC LIMIT $${values.length - 1} OFFSET $${values.length}`;
 
         const result = await sqlConfig.query(query, values);
         return result.rows;
     },
 
     getTransactionCount: async (merchant_id: string, status?: string): Promise<number> => {
-        let query = `SELECT COUNT(*)::int as count FROM Transactions WHERE merchant_id = $1`;
+        let query = `
+            SELECT COUNT(DISTINCT t.id)::int as count
+            FROM Transactions t
+            LEFT JOIN StockMovements sm ON sm.reference_id = t.id::text
+            LEFT JOIN Products p ON p.id = sm.product_id
+            WHERE (
+                t.merchant_id = $1
+                OR (t.merchant_id IS NULL AND p.merchant_id = $1)
+            )
+        `;
         const values: any[] = [merchant_id];
 
         if (status && ['PENDING', 'COMPLETED', 'FAILED'].includes(status)) {
             values.push(status);
-            query += ` AND status = $${values.length}`;
+            query += ` AND t.status = $${values.length}`;
         }
 
         const result = await sqlConfig.query(query, values);
@@ -90,7 +105,18 @@ export const transactionRepository = {
 
     getTransactionById: async (id: string, merchant_id: string): Promise<Transaction | null> => {
         const result = await sqlConfig.query(
-            'SELECT * FROM Transactions WHERE id = $1 AND merchant_id = $2',
+            `
+            SELECT DISTINCT t.*
+            FROM Transactions t
+            LEFT JOIN StockMovements sm ON sm.reference_id = t.id::text
+            LEFT JOIN Products p ON p.id = sm.product_id
+            WHERE t.id = $1
+              AND (
+                t.merchant_id = $2
+                OR (t.merchant_id IS NULL AND p.merchant_id = $2)
+              )
+            LIMIT 1
+            `,
             [id, merchant_id]
         );
         return result.rows[0] || null;
