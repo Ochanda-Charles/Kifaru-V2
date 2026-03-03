@@ -1,4 +1,5 @@
 import { sqlConfig } from '../config/sqlConfig';
+import { PoolClient } from 'pg';
 import { v4 } from 'uuid';
 import { StockMovement, StockMovementInput, InventorySummary, StockMovementType } from '../interfaces/inventoryInterface';
 
@@ -76,6 +77,45 @@ export const inventoryRepository = {
         }
     },
 
+    // Adjusts stock using an externally provided client (runs within caller's transaction)
+    adjustStockWithClient: async (client: PoolClient, productId: string, variantId: string | null, change: number, movementData: Partial<StockMovementInput>): Promise<StockMovement> => {
+        let newQuantity = 0;
+        if (variantId) {
+            const res = await client.query(
+                'UPDATE ProductVariants SET stock_level = stock_level + $1 WHERE id = $2 RETURNING stock_level',
+                [change, variantId]
+            );
+            newQuantity = res.rows[0].stock_level;
+        } else {
+            const res = await client.query(
+                'UPDATE Products SET quantity = quantity + $1 WHERE id = $2 RETURNING quantity',
+                [change, productId]
+            );
+            newQuantity = res.rows[0].quantity;
+        }
+
+        const stockBefore = newQuantity - change;
+        const movementId = v4();
+        const insertMovement = `
+            INSERT INTO StockMovements (id, product_id, variant_id, quantity_change, stock_before, stock_after, movement_type, reference_id, reason, performed_by)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            RETURNING *
+        `;
+        const movementResult = await client.query(insertMovement, [
+            movementId,
+            productId,
+            variantId,
+            change,
+            stockBefore,
+            newQuantity,
+            movementData.type || StockMovementType.ADJUSTMENT,
+            movementData.reference_id || null,
+            movementData.reason || null,
+            movementData.performed_by || null
+        ]);
+        return movementResult.rows[0];
+    },
+
     getStockMovements: async (productId: string, filters: { startDate?: Date, endDate?: Date, type?: StockMovementType }): Promise<StockMovement[]> => {
         let query = 'SELECT * FROM StockMovements WHERE product_id = $1';
         const values: any[] = [productId];
@@ -100,23 +140,58 @@ export const inventoryRepository = {
         return result.rows;
     },
 
+    // Paginated version — uses database-level LIMIT/OFFSET so only the requested
+    // page is transferred from the database, regardless of total row count.
+    getStockMovementsPaginated: async (
+        productId: string,
+        filters: { startDate?: Date, endDate?: Date, type?: StockMovementType },
+        pagination: { page: number, limit: number }
+    ): Promise<{ data: StockMovement[], total: number }> => {
+        const baseWhere = 'WHERE product_id = $1';
+        const filterValues: any[] = [productId];
+        let paramCount = 2;
+        let filterClause = '';
+
+        if (filters.startDate) {
+            filterClause += ` AND created_at >= $${paramCount++}`;
+            filterValues.push(filters.startDate);
+        }
+        if (filters.endDate) {
+            filterClause += ` AND created_at <= $${paramCount++}`;
+            filterValues.push(filters.endDate);
+        }
+        if (filters.type) {
+            filterClause += ` AND movement_type = $${paramCount++}`;
+            filterValues.push(filters.type);
+        }
+
+        const countQuery = `SELECT COUNT(*) FROM StockMovements ${baseWhere}${filterClause}`;
+        const offset = (pagination.page - 1) * pagination.limit;
+        const dataQuery = `SELECT * FROM StockMovements ${baseWhere}${filterClause} ORDER BY created_at DESC LIMIT $${paramCount++} OFFSET $${paramCount++}`;
+
+        const [countRes, dataRes] = await Promise.all([
+            sqlConfig.query(countQuery, filterValues),
+            sqlConfig.query(dataQuery, [...filterValues, pagination.limit, offset]),
+        ]);
+
+        return {
+            data: dataRes.rows,
+            total: parseInt(countRes.rows[0].count, 10),
+        };
+    },
+
     getInventorySummary: async (merchantId: string): Promise<InventorySummary> => {
-        // 1. Basic product stats
         const basicQuery = `
-            SELECT 
-                COUNT(*) as count, 
+            SELECT
+                COUNT(*) as count,
                 COALESCE(SUM(quantity), 0) as total_units,
                 COALESCE(SUM(quantity * price), 0) as total_value,
                 COALESCE(AVG(price), 0) as avg_price,
                 COUNT(CASE WHEN quantity <= 10 AND quantity > 0 THEN 1 END) as low_stock_count,
                 COUNT(CASE WHEN quantity = 0 THEN 1 END) as out_of_stock_count
-            FROM Products 
+            FROM Products
             WHERE merchant_id = $1
         `;
-        const basicRes = await sqlConfig.query(basicQuery, [merchantId]);
-        const basic = basicRes.rows[0];
-
-        // 2. Stock by category
         const categoryQuery = `
             SELECT COALESCE(c.name, 'Uncategorized') as name, COALESCE(SUM(p.quantity), 0)::int as value
             FROM Products p
@@ -125,9 +200,6 @@ export const inventoryRepository = {
             GROUP BY c.name
             ORDER BY value DESC
         `;
-        const categoryRes = await sqlConfig.query(categoryQuery, [merchantId]);
-
-        // 3. Top 5 products by total value (quantity * price)
         const topProductsQuery = `
             SELECT name, (quantity * price)::numeric as value
             FROM Products
@@ -135,18 +207,24 @@ export const inventoryRepository = {
             ORDER BY (quantity * price) DESC
             LIMIT 5
         `;
-        const topProductsRes = await sqlConfig.query(topProductsQuery, [merchantId]);
-
-        // 4. Movement summary (total in vs out)
         const movementQuery = `
-            SELECT 
+            SELECT
                 COALESCE(SUM(CASE WHEN sm.movement_type = 'IN' THEN sm.quantity_change ELSE 0 END), 0) as total_in,
                 COALESCE(SUM(CASE WHEN sm.movement_type IN ('OUT', 'SALE') THEN ABS(sm.quantity_change) ELSE 0 END), 0) as total_out
             FROM StockMovements sm
             JOIN Products p ON sm.product_id = p.id
             WHERE p.merchant_id = $1
         `;
-        const movementRes = await sqlConfig.query(movementQuery, [merchantId]);
+
+        // Run all four independent queries concurrently instead of sequentially
+        const [basicRes, categoryRes, topProductsRes, movementRes] = await Promise.all([
+            sqlConfig.query(basicQuery, [merchantId]),
+            sqlConfig.query(categoryQuery, [merchantId]),
+            sqlConfig.query(topProductsQuery, [merchantId]),
+            sqlConfig.query(movementQuery, [merchantId]),
+        ]);
+
+        const basic = basicRes.rows[0];
         const mov = movementRes.rows[0];
         const totalIn = parseInt(mov.total_in || '0');
         const totalOut = parseInt(mov.total_out || '0');

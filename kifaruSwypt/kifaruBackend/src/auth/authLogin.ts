@@ -2,7 +2,11 @@ import { Request, Response } from "express";
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { sqlConfig } from "../config/sqlConfig";
-const SECRET = process.env.JWT_SECRET || 'fallback-secret-for-development-only';
+
+const SECRET = process.env.JWT_SECRET;
+if (!SECRET) {
+    throw new Error('FATAL: JWT_SECRET environment variable is not set. Refusing to start.');
+}
 
 export const loginUser = async (req: Request, res: Response) => {
     try {
@@ -26,16 +30,19 @@ export const loginUser = async (req: Request, res: Response) => {
             return res.status(401).json({ error: "Incorrect password" });
         }
 
-        //Prepare payload for JWT (excluding password)
-        const { password_hash: ignoreThis, ...loginCredentials } = user;
+        // Sign only the minimum required claims — never encode the full user row
+        const tokenPayload = {
+            merchant_id: user.merchant_id,
+            email: user.email,
+        };
 
-        //Generate JWT token
-        const token = jwt.sign(loginCredentials, SECRET, { expiresIn: '7d' });
+        const token = jwt.sign(tokenPayload, SECRET, { expiresIn: '7d' });
 
         return res.status(200).json({
             message: "Logged in successfully",
             token,
-            ...loginCredentials
+            merchant_id: user.merchant_id,
+            username: user.merchantusername,
         });
 
     } catch (error) {

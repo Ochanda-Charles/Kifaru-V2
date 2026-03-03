@@ -107,10 +107,16 @@ const SuppliersPage: React.FC = () => {
     };
 
     const handleToggleStatus = async (supplier: Supplier) => {
-        const newStatus = supplier.status === "Active" ? "Inactive" : "Active";
+        const newIsActive = supplier.status !== "Active";
         try {
-            await api.put(`/inventory/suppliers/${supplier.id}`, { ...supplier, status: newStatus });
-            message.success(`Supplier marked as ${newStatus}`);
+            await api.put(`/inventory/suppliers/${supplier.id}`, {
+                name: supplier.name,
+                contact_email: supplier.contact_email,
+                phone: supplier.phone,
+                address: supplier.address,
+                is_active: newIsActive,
+            });
+            message.success(`Supplier marked as ${newIsActive ? "Active" : "Inactive"}`);
             fetchSuppliers();
         } catch (error) {
             console.error("Status update error:", error);

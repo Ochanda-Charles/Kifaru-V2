@@ -55,16 +55,12 @@ export const inventoryService = {
         limit: number = 20,
         filters: { startDate?: Date, endDate?: Date, type?: StockMovementType } = {}
     ): Promise<{ data: StockMovement[], total: number, page: number, totalPages: number }> => {
-        // Repo doesn't support pagination natively yet in signature, it returns all.
-        // We can do in-memory pagination for MVP or update Repo.
-        // Task says "Add pagination". Ideally update repo, but let's wrap for now or update repo signature?
-        // Prompt asked to "Add pagination" in service.
-        const allMovements = await inventoryRepository.getStockMovements(productId, filters);
-
-        const startIndex = (page - 1) * limit;
-        const endIndex = page * limit;
-        const data = allMovements.slice(startIndex, endIndex);
-        const total = allMovements.length;
+        // Delegate pagination to the database — only the requested page is fetched
+        const { data, total } = await inventoryRepository.getStockMovementsPaginated(
+            productId,
+            filters,
+            { page, limit }
+        );
 
         return {
             data,

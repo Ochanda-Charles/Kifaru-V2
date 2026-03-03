@@ -1,12 +1,17 @@
-
-
-import mssql from 'mssql';
 import { sqlConfig } from '../config/sqlConfig';
 import { Request, Response } from "express";
 import { v4 } from 'uuid';
 import { ExtendedUserRequest } from '../middlewares/VerifyToken';
 import bcrypt from 'bcrypt'
 
+// Module-scope helper — uses SELECT 1 LIMIT 1 which is more efficient than COUNT(*)
+const checkIfEmailExists = async (email: string): Promise<boolean> => {
+  const result = await sqlConfig.query(
+    'SELECT 1 FROM merchants WHERE email = $1 LIMIT 1',
+    [email]
+  );
+  return (result.rowCount ?? 0) > 0;
+};
 
 //...............signUp user.......................
 export const signupUser = async (req: Request, res: Response) => {
@@ -21,9 +26,7 @@ export const signupUser = async (req: Request, res: Response) => {
       });
     }
 
-    const id = v4();
-    const hashPwd = await bcrypt.hash(password, 10);
-
+    // Check email existence BEFORE the expensive bcrypt hash
     const emailExists = await checkIfEmailExists(merchantEmail);
     if (emailExists) {
       console.log("Email already exists:", merchantEmail);
@@ -31,6 +34,9 @@ export const signupUser = async (req: Request, res: Response) => {
         error: 'Email is already registered',
       });
     }
+
+    const id = v4();
+    const hashPwd = await bcrypt.hash(password, 10);
 
     const query = `
       INSERT INTO merchants (merchant_id, username, email, password_hash)
@@ -41,24 +47,16 @@ export const signupUser = async (req: Request, res: Response) => {
     const result = await sqlConfig.query(query, values);
 
     if ((result.rowCount ?? 0) > 0) {
-      return res.json({
+      return res.status(201).json({
         message: "Account created successfully",
       });
     } else {
-      return res.json({ error: "An error occurred while creating the account." });
+      return res.status(500).json({ error: "An error occurred while creating the account." });
     }
   } catch (error) {
     console.error("Error creating user:", error);
-    return res.json({ error: " The user account was not created." });
+    return res.status(500).json({ error: "The user account was not created." });
   }
-
-  async function checkIfEmailExists(merchantEmail: string): Promise<boolean> {
-    const query = 'SELECT COUNT(*) FROM merchants WHERE email = $1';
-    const values = [merchantEmail];
-    const result = await sqlConfig.query(query, values);
-    return parseInt(result.rows[0].count) > 0;
-  }
-
 };
 
 // ..................createProduct............................
@@ -90,7 +88,11 @@ export const AddProduct = async (req: ExtendedUserRequest, res: Response) => {
 //...............get Products...........................
 export const getProducts = async (req: Request, res: Response) => {
   try {
-    const result = await sqlConfig.query('SELECT * FROM Products');
+    const result = await sqlConfig.query(
+      `SELECT p.*, m.wallet_address AS merchant_wallet
+       FROM Products p
+       LEFT JOIN merchants m ON p.merchant_id = m.merchant_id`
+    );
     return res.json({
       message: result.rows
     });
@@ -119,10 +121,6 @@ export const getProductsByMerchantID = async (req: Request, res: Response) => {
     const values = [id];
     const result = await sqlConfig.query(query, values);
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: "No products found for this merchant." });
-    }
-
     return res.status(200).json({
       message: "Products retrieved successfully.",
       data: result.rows,
@@ -136,14 +134,21 @@ export const getProductsByMerchantID = async (req: Request, res: Response) => {
 
 
 //...............update Product by id...........................
-export const updateProduct = async (req: Request, res: Response) => {
+// Uses ExtendedUserRequest so merchant_id from the verified JWT can be used in the WHERE clause,
+// preventing one merchant from updating another merchant's product (IDOR).
+export const updateProduct = async (req: ExtendedUserRequest, res: Response) => {
   try {
     const { id } = req.params;
+    const merchant_id = req.info?.merchant_id;
     const { name, description, imageUrl, price, category_id, supplier_id, quantity } = req.body;
 
+    if (!merchant_id) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
     const result = await sqlConfig.query(
-      `UPDATE Products SET name = $1, description = $2, imageUrl = $3, price = $4, category_id = $5, supplier_id = $6, quantity = $7 WHERE id = $8`,
-      [name, description, imageUrl, price, category_id, supplier_id, quantity, id]
+      `UPDATE Products SET name = $1, description = $2, imageUrl = $3, price = $4, category_id = $5, supplier_id = $6, quantity = $7 WHERE id = $8 AND merchant_id = $9`,
+      [name, description, imageUrl, price, category_id, supplier_id, quantity, id, merchant_id]
     );
 
     if ((result.rowCount ?? 0) > 0) {
@@ -162,10 +167,21 @@ export const updateProduct = async (req: Request, res: Response) => {
 };
 
 //...............delete Product by id...........................
-export const deleteProduct = async (req: Request, res: Response) => {
+// Uses ExtendedUserRequest so merchant_id from the verified JWT can be used in the WHERE clause,
+// preventing one merchant from deleting another merchant's product (IDOR).
+export const deleteProduct = async (req: ExtendedUserRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const result = await sqlConfig.query('DELETE FROM Products WHERE id = $1', [id]);
+    const merchant_id = req.info?.merchant_id;
+
+    if (!merchant_id) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const result = await sqlConfig.query(
+      'DELETE FROM Products WHERE id = $1 AND merchant_id = $2',
+      [id, merchant_id]
+    );
     if ((result.rowCount ?? 0) > 0) {
       return res.json({
         message: "Product deleted successfully"

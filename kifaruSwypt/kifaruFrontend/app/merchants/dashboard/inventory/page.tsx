@@ -1,12 +1,9 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import axios from "axios";
 import api from "@/app/utilis/api";
 import { jwtDecode } from "jwt-decode";
 import {
-    Layout,
-    Menu,
     Button,
     Modal,
     Table,
@@ -23,9 +20,6 @@ import {
     Empty,
 } from "antd";
 import {
-    UserOutlined,
-    DollarOutlined,
-    ShopOutlined,
     BarChartOutlined,
     WarningOutlined,
     ExportOutlined,
@@ -38,7 +32,6 @@ import {
 } from "@ant-design/icons";
 import Link from "next/link";
 
-const { Header, Content, Sider } = Layout;
 const { Title, Text } = Typography;
 
 // Types
@@ -89,12 +82,10 @@ const InventoryDashboard: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [alertsModalVisible, setAlertsModalVisible] = useState(false);
 
-    // Initialize auth and fetch data
+    // Initialize auth
     useEffect(() => {
         const token = localStorage.getItem("merchantToken");
         if (token) {
-            axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
-
             try {
                 const decoded: any = jwtDecode(token);
                 const user = decoded.merchantUserName || decoded.merchantusername || decoded.sub || "User";
@@ -117,80 +108,59 @@ const InventoryDashboard: React.FC = () => {
     const fetchAllData = async () => {
         setLoading(true);
         try {
-            await Promise.all([
-                fetchSummary(),
-                fetchMovements(),
-                fetchAlerts(),
-                fetchTopProducts(),
+            // Fetch all four resources concurrently.
+            // Products are fetched once and used for both topProducts and the summary fallback,
+            // eliminating the duplicate /getMerchantProducts calls that existed before.
+            // Movements now correctly calls /inventory/report?type=movements (merchant-wide),
+            // not /inventory/movements which requires a product_id and always returned 400.
+            const [summaryResult, alertsResult, productsResult, movementsResult] = await Promise.allSettled([
+                api.get(`/inventory/report?type=summary`),
+                api.get(`/inventory/alerts`),
+                api.get(`/getMerchantProducts/${merchantId}`),
+                api.get(`/inventory/report?type=movements`),
             ]);
+
+            // Products — used for topProducts display and as summary fallback
+            const products: Product[] =
+                productsResult.status === "fulfilled"
+                    ? (productsResult.value.data.data || [])
+                    : [];
+
+            if (products.length > 0) {
+                setTopProducts(
+                    [...products].sort((a, b) => b.quantity - a.quantity).slice(0, 10)
+                );
+            }
+
+            // Summary — use the dedicated endpoint; fall back to calculating from products
+            if (summaryResult.status === "fulfilled") {
+                const s = summaryResult.value.data.data || {};
+                setSummary({
+                    totalProducts: s.totalProducts || 0,
+                    totalStockValue: s.totalInventoryValue || 0,
+                    lowStockItems: s.lowStockCount || 0,
+                    outOfStock: s.outOfStockCount || 0,
+                });
+            } else if (products.length > 0) {
+                setSummary({
+                    totalProducts: products.length,
+                    totalStockValue: products.reduce((sum, p) => sum + p.price * p.quantity, 0),
+                    lowStockItems: products.filter(p => p.quantity > 0 && p.quantity <= 10).length,
+                    outOfStock: products.filter(p => p.quantity === 0).length,
+                });
+            }
+
+            if (alertsResult.status === "fulfilled") {
+                setAlerts(alertsResult.value.data.data || []);
+            }
+
+            if (movementsResult.status === "fulfilled") {
+                setMovements(movementsResult.value.data.data || []);
+            }
         } catch (error) {
-            console.error("Error fetching data:", error);
+            console.error("Error fetching inventory data:", error);
         } finally {
             setLoading(false);
-        }
-    };
-
-    const fetchSummary = async () => {
-        try {
-            const response = await api.get(
-                `/inventory/report?type=summary&merchant_id=${merchantId}`
-            );
-            setSummary(response.data);
-        } catch (error) {
-            console.error("Error fetching summary:", error);
-            // Fallback to calculating from products
-            try {
-                const productsRes = await api.get(
-                    `/getMerchantProducts/${merchantId}`
-                );
-                const products = productsRes.data.data || [];
-                const calculated: SummaryData = {
-                    totalProducts: products.length,
-                    totalStockValue: products.reduce((sum: number, p: Product) => sum + (p.price * p.quantity), 0),
-                    lowStockItems: products.filter((p: Product) => p.quantity > 0 && p.quantity <= 10).length,
-                    outOfStock: products.filter((p: Product) => p.quantity === 0).length,
-                };
-                setSummary(calculated);
-                setTopProducts(products.sort((a: Product, b: Product) => b.quantity - a.quantity).slice(0, 10));
-            } catch (err) {
-                console.error("Error fetching products for summary:", err);
-            }
-        }
-    };
-
-    const fetchMovements = async () => {
-        try {
-            const response = await api.get(
-                `/inventory/movements?limit=10&merchant_id=${merchantId}`
-            );
-            setMovements(response.data.data || []);
-        } catch (error) {
-            console.error("Error fetching movements:", error);
-            setMovements([]);
-        }
-    };
-
-    const fetchAlerts = async () => {
-        try {
-            const response = await api.get(
-                `/inventory/alerts?unread=true&merchant_id=${merchantId}`
-            );
-            setAlerts(response.data.data || []);
-        } catch (error) {
-            console.error("Error fetching alerts:", error);
-            setAlerts([]);
-        }
-    };
-
-    const fetchTopProducts = async () => {
-        try {
-            const productsRes = await api.get(
-                `/getMerchantProducts/${merchantId}`
-            );
-            const products = productsRes.data.data || [];
-            setTopProducts(products.sort((a: Product, b: Product) => b.quantity - a.quantity).slice(0, 10));
-        } catch (error) {
-            console.error("Error fetching products:", error);
         }
     };
 
@@ -231,7 +201,6 @@ const InventoryDashboard: React.FC = () => {
         localStorage.removeItem("merchantToken");
         localStorage.removeItem("your_wallet_address");
         localStorage.removeItem("merchant_id");
-        axios.defaults.headers.common["Authorization"] = "";
         window.location.href = "/";
     };
 

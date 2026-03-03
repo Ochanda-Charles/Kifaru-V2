@@ -23,6 +23,7 @@ import {
     processCheckout
 } from '../controllers/inventoryController';
 import { createProduct } from '../controllers/productController';
+import { getTransactions, getTransactionById } from '../controllers/transactionController';
 
 const router = Router();
 
@@ -51,6 +52,10 @@ router.get('/movements', verifyToken, asyncHandler(getMovements));
 router.get('/report', verifyToken, asyncHandler(getReport));
 router.get('/alerts', verifyToken, asyncHandler(getAlerts));
 router.put('/alerts/:id/read', verifyToken, asyncHandler(markAlertRead));
+
+// Transactions
+router.get('/transactions', verifyToken, asyncHandler(getTransactions));
+router.get('/transactions/:id', verifyToken, asyncHandler(getTransactionById));
 
 // Public Checkout Endpoint
 router.post('/checkout', asyncHandler(processCheckout));

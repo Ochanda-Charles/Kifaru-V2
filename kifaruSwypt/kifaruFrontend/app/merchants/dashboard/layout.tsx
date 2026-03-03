@@ -8,8 +8,8 @@ import {
     FolderOpenOutlined,
     FileTextOutlined,
     TeamOutlined,
-    UserOutlined,
     DollarOutlined,
+    SwapOutlined,
 } from "@ant-design/icons";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -40,6 +40,7 @@ export default function DashboardLayout({
         if (pathname.includes("/categories")) return "categories";
         if (pathname.includes("/reports")) return "reports";
         if (pathname.includes("/suppliers")) return "suppliers";
+        if (pathname.includes("/transactions")) return "transactions";
         return "dashboard";
     };
 
@@ -119,7 +120,7 @@ export default function DashboardLayout({
                         { key: "categories", icon: <FolderOpenOutlined />, label: <Link href="/merchants/dashboard/categories">Categories</Link> },
                         { key: "reports", icon: <FileTextOutlined />, label: <Link href="/merchants/dashboard/reports">Reports</Link> },
                         { key: "suppliers", icon: <TeamOutlined />, label: <Link href="/merchants/dashboard/suppliers">Suppliers</Link> },
-                        { key: "Clients", icon: <UserOutlined />, label: "Clients" },
+                        { key: "transactions", icon: <SwapOutlined />, label: <Link href="/merchants/dashboard/transactions">Transactions Log</Link> },
                         { type: 'divider' },
                         { key: "my Wallet", icon: <DollarOutlined />, label: "My Wallet" },
                     ]}

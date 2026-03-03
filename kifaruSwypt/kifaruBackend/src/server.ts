@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 import router from './routes/userRoutes';
 import inventoryRoutes from './routes/inventoryRoutes';
+import fonbnkRoutes from './routes/fonbnkRoutes';
 import bodyParser from 'body-parser';
 import cors from 'cors';
 
@@ -20,6 +21,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 app.use('/api', router);
 app.use('/api/inventory', inventoryRoutes);
+app.use('/api/swypt', fonbnkRoutes);
 
 app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
     console.error('Unhandled Error:', error);

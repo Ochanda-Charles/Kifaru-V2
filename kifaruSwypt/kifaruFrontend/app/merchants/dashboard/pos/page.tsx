@@ -25,8 +25,7 @@ import {
     ScanOutlined
 } from '@ant-design/icons';
 import api from '@/app/utilis/api';
-import { DepositModal } from 'swypt-checkout';
-import 'swypt-checkout/dist/styles.css';
+import FonbnkCheckoutModal from '@/app/components/FonbnkCheckoutModal';
 
 const { Content } = Layout;
 const { Title, Text } = Typography;
@@ -141,19 +140,14 @@ const MerchantPOS = () => {
             message.warning("Cart is empty!");
             return;
         }
-        if (!merchantAddress) {
-            message.error("Merchant wallet address is missing. Please set your wallet address in Settings before accepting payments.");
-            return;
-        }
         setIsDepositModalOpen(true);
     };
 
-    const handlePaymentSuccess = async () => {
+    const handlePaymentSuccess = async (data?: { orderId?: string }) => {
         try {
-            console.log("Payment flow completed, syncing inventory...");
+            console.log("Payment completed, syncing inventory...", data);
             const merchant_id = localStorage.getItem('merchant_id');
 
-            // Call backend to record transaction and update stock
             await api.post("/inventory/checkout", {
                 items: cart.map(item => ({
                     product_id: item.product.id,
@@ -162,7 +156,9 @@ const MerchantPOS = () => {
                 })),
                 totalAmount: calculateTotal(),
                 merchant_id,
-                paymentMethod: 'crypto',
+                fonbnkOrderId: data?.orderId,
+                paymentData: { method: 'crypto_mpesa' },
+                customerDetails: {},
                 reference: `POS-${Date.now()}`
             });
 
@@ -178,13 +174,8 @@ const MerchantPOS = () => {
         }
     };
 
-    // The SDK does not support an onSuccess callback, so we handle
-    // post-payment logic when the modal closes.
     const handleModalClose = () => {
         setIsDepositModalOpen(false);
-        if (cart.length > 0) {
-            handlePaymentSuccess();
-        }
     };
 
     return (
@@ -311,23 +302,16 @@ const MerchantPOS = () => {
                 </Col>
             </Row>
 
-            {/* Swypt Payment Modal */}
-            {isDepositModalOpen && merchantAddress && (
-                <div style={{ position: 'fixed', zIndex: 1000, inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)' }} onClick={handleModalClose} />
-                    <div style={{ position: 'relative', zIndex: 1010 }}>
-                        <DepositModal
-                            isOpen={isDepositModalOpen}
-                            onClose={handleModalClose}
-                            headerBackgroundColor="#000"
-                            businessName="Kifaru POS"
-                            merchantName="Store Checkout"
-                            merchantAddress={merchantAddress}
-                            amount={calculateTotal()}
-                        />
-                    </div>
-                </div>
-            )}
+            {/* Fonbnk Checkout Modal */}
+            <FonbnkCheckoutModal
+                isOpen={isDepositModalOpen}
+                onClose={handleModalClose}
+                onSuccess={handlePaymentSuccess}
+                amount={calculateTotal()}
+                merchantAddress={merchantAddress || ''}
+                merchantId={localStorage.getItem('merchant_id') || ''}
+                businessName="Kifaru POS"
+            />
 
         </Content>
     );

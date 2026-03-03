@@ -135,69 +135,95 @@ export const markAlertRead = async (req: Request, res: Response) => {
 };
 
 export const processCheckout = async (req: Request, res: Response) => {
+    const { items, paymentData, customerDetails, merchant_id, fonbnkOrderId } = req.body;
+
+    if (!items || !Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ success: false, error: 'Invalid cart items' });
+    }
+
+    const { transactionRepository } = await import('../repositories/transactionRepository');
+    const { sqlConfig } = await import('../config/sqlConfig');
+
+    const client = await sqlConfig.connect();
     try {
-        // Simple validation, ideally use Joi
-        const { items, paymentData, customerDetails } = req.body;
+        await client.query('BEGIN');
 
-        if (!items || !Array.isArray(items) || items.length === 0) {
-            return res.status(400).json({ success: false, error: 'Invalid cart items' });
-        }
-
-        // 1. Create Transaction Record
-        // We'll calculate total from items or trust frontend? 
-        // Best practice: calculate from backend prices. But for this task, let's assume valid amounts or simple sum.
-        // We'll trust payload for speed as per prompt "integrate payment completion", but verify stock existence.
-
+        // 1. Verify all products exist and fetch authoritative prices from the database.
+        //    Never trust prices sent by the client.
         let totalAmount = 0;
+        let resolvedMerchantId = merchant_id || null;
+        const verifiedItems: Array<{ productId: string; quantity: number; unitPrice: number }> = [];
+
         for (const item of items) {
-            totalAmount += (item.price * item.quantity); // item should have price
+            const productId = item.product?.id || item.product_id || item.id;
+            if (!productId) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ success: false, error: 'Cart item is missing a product ID' });
+            }
+
+            const dbProduct = await inventoryRepository.getProductById(productId);
+            if (!dbProduct) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ success: false, error: `Product ${productId} not found` });
+            }
+
+            // Resolve merchant_id from the first product if not provided
+            if (!resolvedMerchantId && dbProduct.merchant_id) {
+                resolvedMerchantId = dbProduct.merchant_id;
+            }
+
+            const unitPrice = parseFloat(dbProduct.price);
+            totalAmount += unitPrice * item.quantity;
+            verifiedItems.push({ productId, quantity: item.quantity, unitPrice });
         }
 
-        // Import repository lazily or at top. I Will add import.
-        const { transactionRepository } = await import('../repositories/transactionRepository');
+        // Build payment_metadata, including fonbnk_order_id if provided
+        const metadata = {
+            ...(paymentData || {}),
+            ...(fonbnkOrderId ? { fonbnk_order_id: fonbnkOrderId } : {})
+        };
 
-        const transaction = await transactionRepository.createTransaction({
+        // 2. Create the transaction as PENDING — only mark COMPLETED after all stock adjustments succeed
+        const transaction = await transactionRepository.createTransactionWithClient(client, {
+            merchant_id: resolvedMerchantId,
             total_amount: totalAmount,
             currency: 'KES',
-            status: 'COMPLETED',
+            status: 'PENDING',
             customer_details: customerDetails,
-            payment_metadata: paymentData
+            payment_metadata: metadata
         });
 
-        // 2. Adjust Stock for each item
-        const results = [];
-        for (const item of items) {
-            try {
-                // item.product.id or item.product_id
-                const productId = item.product?.id || item.product_id || item.id;
-                const quantity = item.quantity;
-
-                // Call adjustStock
-                // We need to use 'SALE' type
-                const movement = await inventoryRepository.adjustStock(
-                    productId,
-                    null, // variantId
-                    -quantity, // Negative for sale
-                    {
-                        type: StockMovementType.SALE,
-                        reason: 'Customer Purchase',
-                        reference_id: transaction.id,
-                        // performed_by: 'system' or null
-                    }
-                );
-                results.push({ id: productId, status: 'success' });
-            } catch (err: any) {
-                console.error(`Failed to adjust stock for item ${item.product?.id}:`, err);
-                results.push({ id: item.product?.id, status: 'failed', error: err.message });
-                // Consider: rollback transaction? For now, we continue and report partial success?
-                // Or simple throw to fail the whole request if we had a database transaction wrapper.
-            }
+        // 3. Adjust stock for each item within the same transaction
+        for (const item of verifiedItems) {
+            await inventoryRepository.adjustStockWithClient(
+                client,
+                item.productId,
+                null,
+                -item.quantity,
+                {
+                    type: StockMovementType.SALE,
+                    reason: 'Customer Purchase',
+                    reference_id: transaction.id,
+                }
+            );
         }
 
-        return res.status(200).json({ success: true, transactionId: transaction.id, results });
+        // 4. All adjustments succeeded — mark transaction COMPLETED and commit
+        await client.query(
+            'UPDATE Transactions SET status = $1 WHERE id = $2',
+            ['COMPLETED', transaction.id]
+        );
 
-    } catch (err: any) {
-        console.error('Error in processCheckout:', err);
-        return res.status(500).json({ success: false, error: err.message || 'Server Error' });
+        await client.query('COMMIT');
+
+        return res.status(200).json({ success: true, transactionId: transaction.id });
+
+    } catch (err: unknown) {
+        await client.query('ROLLBACK');
+        const message = err instanceof Error ? err.message : 'Server Error';
+        console.error('Error in processCheckout, transaction rolled back:', message);
+        return res.status(500).json({ success: false, error: 'Checkout failed. No changes were made.' });
+    } finally {
+        client.release();
     }
 };

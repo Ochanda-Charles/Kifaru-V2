@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer'
 import dotenv from 'dotenv'
 
+dotenv.config();
 
 interface mail_configs{
     service: string;
@@ -13,7 +14,9 @@ interface mail_configs{
     }
 }
 
-dotenv.config();
+if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    throw new Error('FATAL: EMAIL_USER and EMAIL_PASS environment variables must be set');
+}
 
 function createTransporter(config: mail_configs) {
     const transporter = nodemailer.createTransport(config)
@@ -27,8 +30,8 @@ let configurations: mail_configs = ({
     port: 587,
     requireTLS: true,
     auth: {
-        user: "compgodwin@gmail.com",
-        pass: "hzrluspfwulgptjm"
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
     }
 })
 

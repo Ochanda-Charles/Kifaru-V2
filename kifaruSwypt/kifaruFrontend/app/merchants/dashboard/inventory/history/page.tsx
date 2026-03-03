@@ -132,7 +132,7 @@ const MovementHistoryPage: React.FC = () => {
                 params.endDate = dateRange[1].toISOString();
             }
 
-            const response = await axios.get("https://kifaruswypt.onrender.com/inventory/movements", { params });
+            const response = await api.get("/inventory/movements", { params });
 
             // Handle different potential response structures
             const data = response.data;
@@ -328,7 +328,7 @@ const MovementHistoryPage: React.FC = () => {
                             icon: <BarChartOutlined />,
                             label: <Link href="/merchants/dashboard/inventory">Inventory</Link>,
                         },
-                        { key: "clients", icon: <UserOutlined />, label: "Clients" },
+                        { key: "transactions", icon: <DollarOutlined />, label: <Link href="/merchants/dashboard/transactions">Transactions Log</Link> },
                         { key: "wallet", icon: <DollarOutlined />, label: "My Wallet" },
                     ]}
                 />

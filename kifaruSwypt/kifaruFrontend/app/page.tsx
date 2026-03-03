@@ -1,12 +1,11 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { DepositModal } from "swypt-checkout";
 import { ShoppingCart, Instagram, Twitter, Facebook, X, Star, Heart, Sparkles, Menu, LogIn, ChevronRight } from "lucide-react";
-import "swypt-checkout/dist/styles.css";
 import { useRouter } from "next/navigation";
-import axios from "axios";
+import Link from "next/link";
 import api from "@/app/utilis/api";
+import FonbnkCheckoutModal from "@/app/components/FonbnkCheckoutModal";
 
 
 // Type definitions
@@ -22,7 +21,7 @@ interface Product {
   new?: boolean;
   quantity?: number;
   walletaddressed?: string;
-
+  merchant_wallet?: string;
 }
 
 interface CartItem {
@@ -194,7 +193,7 @@ const CartPanel: React.FC<CartPanelProps> = ({
 const CartIcon: React.FC<CartIconProps> = ({ itemCount, onClick }) => (
   <button
     onClick={onClick}
-    className="relative p-3 text-white hover:text-green-200 transition-all duration-200 group"
+    className="relative p-3 text-gray-700 hover:text-green-600 transition-all duration-200 group"
     type="button"
     aria-label={`Shopping cart with ${itemCount} items`}
   >
@@ -230,17 +229,15 @@ const NavLinks: React.FC<{ mobile?: boolean }> = ({ mobile }) => {
 };
 
 const AuthButtons: React.FC<{ isLoggedIn: boolean; mobile?: boolean; onLogout: () => void }> = ({ isLoggedIn, mobile, onLogout }) => {
-  const router = useRouter();
-
   if (isLoggedIn) {
     return (
       <div className={`${mobile ? "flex flex-col gap-4" : "flex items-center gap-4"}`}>
-        <button
-          onClick={() => router.push("/merchants/dashboard")}
+        <Link
+          href="/merchants/dashboard"
           className="bg-green-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-green-700 transition-all shadow-md hover:shadow-lg flex items-center gap-2"
         >
           Dashboard <ChevronRight size={18} />
-        </button>
+        </Link>
         <button
           onClick={onLogout}
           className="text-gray-600 font-medium hover:text-red-600 transition-colors"
@@ -253,18 +250,18 @@ const AuthButtons: React.FC<{ isLoggedIn: boolean; mobile?: boolean; onLogout: (
 
   return (
     <div className={`${mobile ? "flex flex-col gap-4" : "flex items-center gap-4"}`}>
-      <button
-        onClick={() => router.push("/merchants/login")}
+      <Link
+        href="/merchants/login"
         className="text-gray-600 font-medium hover:text-green-600 transition-colors"
       >
         Log In
-      </button>
-      <button
-        onClick={() => router.push("/merchants/signUp")}
+      </Link>
+      <Link
+        href="/merchants/signUp"
         className="bg-green-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-green-700 transition-all shadow-md hover:shadow-lg"
       >
         Get Started
-      </button>
+      </Link>
     </div>
   );
 };
@@ -534,10 +531,8 @@ const KifaruBeautyStore: React.FC = () => {
     const fetchProducts = async () => {
       try {
         const response = await api.get("/getProducts");
-        setProducts(response.data.message);
-        console.log("Products fetched:", response.data);
-        const merchantAddress = response.data.message[0].walletaddressed;
-        console.log("Merchant Address:", merchantAddress);
+        const fetchedProducts = response.data.message || [];
+        setProducts(fetchedProducts);
       } catch (error) {
         console.error("Error fetching products:", error);
       }
@@ -552,10 +547,15 @@ const KifaruBeautyStore: React.FC = () => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
 
-  // Derive merchantAddress from the first cart item's product, falling back to the first product in the catalog
+  // Derive merchantAddress from the first cart item's product, preferring merchant_wallet (from merchants table)
+  // and falling back to walletaddressed (per-product field) for backwards compatibility
   const merchantAddress: string | null =
-    (cartItems.length > 0 ? cartItems[0].product.walletaddressed : null)
-    || (products.length > 0 ? products[0].walletaddressed : null)
+    (cartItems.length > 0
+      ? cartItems[0].product.merchant_wallet || cartItems[0].product.walletaddressed
+      : null)
+    || (products.length > 0
+      ? products[0].merchant_wallet || products[0].walletaddressed
+      : null)
     || null;
   const categories: string[] = Array.from(new Set(products.map((product: Product) => product.category)));
 
@@ -596,10 +596,6 @@ const KifaruBeautyStore: React.FC = () => {
   );
 
   const handleCheckout = (): void => {
-    if (!merchantAddress) {
-      alert("Cannot process payment: merchant wallet address is missing. Please contact support.");
-      return;
-    }
     setIsCartOpen(false);
     document.body.style.overflow = 'hidden';
     setTimeout(() => {
@@ -607,22 +603,23 @@ const KifaruBeautyStore: React.FC = () => {
     }, 200);
   };
 
-  const handlePaymentSuccess = async () => {
+  const handlePaymentSuccess = async (data?: { orderId?: string }) => {
     try {
-      console.log("Payment successful, syncing inventory...");
-      // Replace with your actual backend URL or env variable
-      const API_URL = "http://localhost:5000";
+      console.log("Payment successful, syncing inventory...", data);
+
+      // Derive merchant_id from first product if available
+      const firstProduct = cartItems[0]?.product;
+      const merchantId = (firstProduct as any)?.merchant_id || null;
 
       await api.post("/inventory/checkout", {
         items: cartItems,
-        paymentData: { method: 'crypto' }, // Swypt might provide more data if we had the object
-        customerDetails: {}
+        paymentData: { method: 'crypto_mpesa' },
+        customerDetails: {},
+        merchant_id: merchantId,
+        fonbnkOrderId: data?.orderId,
       });
 
       setCartItems([]);
-      setIsModalOpen(false);
-      // You might want a better success UI here
-      alert("Purchase successful! Stock updated.");
     } catch (error) {
       console.error("Inventory sync failed:", error);
       alert("Payment successful but inventory update failed. Please contact support.");
@@ -632,45 +629,27 @@ const KifaruBeautyStore: React.FC = () => {
   const handleCloseModal = (): void => {
     document.body.style.overflow = 'auto';
     setIsModalOpen(false);
-    // The SDK does not support an onSuccess callback, so we trigger
-    // post-payment logic when the modal closes. If the user closed
-    // without completing payment, the backend checkout call will
-    // gracefully fail or can be guarded server-side.
-    if (cartItems.length > 0) {
-      handlePaymentSuccess();
-    }
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-green-50">
       {/* Organic background shapes */}
-      <div className="fixed inset-0 z-0 overflow-hidden">
+      <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-24 -left-24 w-96 h-96 bg-gradient-to-br from-green-200/30 to-transparent rounded-full blur-3xl"></div>
         <div className="absolute top-1/4 right-0 w-80 h-80 bg-gradient-to-bl from-gray-200/40 to-transparent rounded-full blur-3xl"></div>
         <div className="absolute bottom-0 left-1/4 w-72 h-72 bg-gradient-to-tr from-green-300/20 to-transparent rounded-full blur-3xl"></div>
         <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-gradient-radial from-white/50 to-transparent rounded-full blur-2xl"></div>
       </div>
 
-      {/* Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div
-            className="fixed inset-0 bg-black/60 backdrop-blur-md"
-            onClick={handleCloseModal}
-          />
-          <div className="relative z-50 max-w-2xl w-full">
-            <DepositModal
-              isOpen={isModalOpen}
-              onClose={handleCloseModal}
-              headerBackgroundColor="linear-gradient(135deg, #000000 0%, #1f2937 50%, #16a34a 100%)"
-              businessName="Kifaru Beauty"
-              merchantName="Kifaru Beauty Store"
-              merchantAddress={merchantAddress!}
-              amount={cartTotal}
-            />
-          </div>
-        </div>
-      )}
+      {/* Fonbnk Checkout Modal */}
+      <FonbnkCheckoutModal
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        onSuccess={handlePaymentSuccess}
+        amount={cartTotal}
+        merchantAddress={merchantAddress || ''}
+        businessName="Kifaru Beauty"
+      />
 
       <CartPanel
         isOpen={isCartOpen}
@@ -760,18 +739,18 @@ const KifaruBeautyStore: React.FC = () => {
               Join thousands of merchants who are growing their business and accepting global payments with Kifaru Swypt.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <button
-                onClick={() => router.push("/merchants/signUp")}
-                className="w-full sm:w-auto bg-white text-green-700 px-10 py-4 rounded-2xl font-black text-lg shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-105 active:scale-95"
+              <Link
+                href="/merchants/signUp"
+                className="w-full sm:w-auto bg-white text-green-700 px-10 py-4 rounded-2xl font-black text-lg shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-105 active:scale-95 text-center"
               >
                 Sign Up as a Merchant
-              </button>
-              <button
-                onClick={() => router.push("/merchants/login")}
-                className="w-full sm:w-auto bg-green-500/20 backdrop-blur-md border border-white/30 text-white px-10 py-4 rounded-2xl font-black text-lg hover:bg-green-500/30 transition-all duration-300 transform hover:scale-105"
+              </Link>
+              <Link
+                href="/merchants/login"
+                className="w-full sm:w-auto bg-green-500/20 backdrop-blur-md border border-white/30 text-white px-10 py-4 rounded-2xl font-black text-lg hover:bg-green-500/30 transition-all duration-300 transform hover:scale-105 text-center"
               >
                 Merchant Login
-              </button>
+              </Link>
             </div>
           </div>
         </div>

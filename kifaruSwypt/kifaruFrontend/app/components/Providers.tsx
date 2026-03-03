@@ -2,10 +2,11 @@
 
 import React from "react";
 import NextTopLoader from "nextjs-toploader";
+import { AntdRegistry } from "@ant-design/nextjs-registry";
 
 const Providers = ({ children }: { children: React.ReactNode }) => {
     return (
-        <>
+        <AntdRegistry>
             <NextTopLoader
                 color="#16a34a"
                 initialPosition={0.08}
@@ -19,7 +20,7 @@ const Providers = ({ children }: { children: React.ReactNode }) => {
                 zIndex={1600}
             />
             {children}
-        </>
+        </AntdRegistry>
     );
 };
 

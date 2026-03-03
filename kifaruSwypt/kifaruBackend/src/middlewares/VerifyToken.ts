@@ -5,7 +5,10 @@ import dotenv from 'dotenv'
 import { User, loggedUser } from "../interface/userInterface";
 dotenv.config()
 
-const SECRET = process.env.JWT_SECRET || 'fallback-secret-for-development-only';
+const SECRET = process.env.JWT_SECRET;
+if (!SECRET) {
+    throw new Error('FATAL: JWT_SECRET environment variable is not set. Refusing to start.');
+}
 
 export interface ExtendedUserRequest extends Request {
     info?: loggedUser
@@ -33,11 +36,10 @@ export const verifyToken = (req: ExtendedUserRequest, res: Response, next: NextF
         req.info = data;
         next();
 
-    } catch (error: any) {
-        console.error('Token verification error:', error.message);
-        return res.status(403).json({
-            message: "Invalid or expired token",
-            error: error.message
+    } catch (error) {
+        console.error('Token verification error:', error instanceof Error ? error.message : error);
+        return res.status(401).json({
+            message: "Invalid or expired token"
         });
     }
 }

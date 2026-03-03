@@ -1,13 +1,12 @@
 
 "use client";
 
-import React, { use, useEffect, useState } from "react";
-import axios from "axios";
+import React, { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import api from "@/app/utilis/api";
 import { jwtDecode } from "jwt-decode";
 import {
   Layout,
-  Menu,
   Button,
   Modal,
   Input,
@@ -15,8 +14,6 @@ import {
   Upload,
   Table,
   message,
-  Row,
-  Col,
   Typography,
   Form,
   Select,
@@ -28,18 +25,11 @@ import {
   UserOutlined,
   DollarOutlined,
   ShopOutlined,
-  CopyOutlined,
-  BarChartOutlined,
-  FolderOpenOutlined,
-  TeamOutlined,
-  FileTextOutlined,
 } from "@ant-design/icons";
-import Link from "next/link";
 
 import WalletSetupModal from "../../utilis/WalletSetupModal";
 import WalletAddressWithCopy from "../../utilis/walletCopy";
-import { log } from "console";
-const { Header, Content, Sider } = Layout;
+const { Content } = Layout;
 const { Title } = Typography;
 
 type Product = {
@@ -67,6 +57,7 @@ type Supplier = {
 };
 
 const MerchantDashboard: React.FC = () => {
+  const router = useRouter();
   const [walletModalVisible, setWalletModalVisible] = useState(false);
   const [savedWalletAddress, setSavedWalletAddress] = useState("");
   const [merchantusername, setMerchantUsername] = useState("User");
@@ -490,6 +481,11 @@ const MerchantDashboard: React.FC = () => {
   const handleCardClick = async (key: string) => {
     console.log('Menu clicked with key:', key);
 
+    if (key === 'view-transactions') {
+      router.push('/merchants/dashboard/transactions');
+      return;
+    }
+
     if (key === 'view-wallet') {
       console.log('Wallet menu clicked');
 
@@ -542,7 +538,7 @@ const MerchantDashboard: React.FC = () => {
         {/* Left: Cards */}
         <div style={{ display: "flex", gap: 24, flex: 1 }}>
           {[
-            { title: "View Transactions", icon: <DollarOutlined /> },
+            { key: "view-transactions", title: "View Transactions", icon: <DollarOutlined /> },
             { title: "View Orders", icon: <ShopOutlined /> },
             { key: "view-wallet", title: "View Wallet Address", icon: <UserOutlined /> },
           ].map((card) => (
