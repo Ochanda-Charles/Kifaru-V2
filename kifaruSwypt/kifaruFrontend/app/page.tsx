@@ -603,7 +603,7 @@ const KifaruBeautyStore: React.FC = () => {
     }, 200);
   };
 
-  const handlePaymentSuccess = async (data?: { orderId?: string }) => {
+  const handlePaymentSuccess = async (data?: { orderId?: string; orderParams?: string }) => {
     try {
       console.log("Payment successful, syncing inventory...", data);
 
@@ -617,6 +617,7 @@ const KifaruBeautyStore: React.FC = () => {
         customerDetails: {},
         merchant_id: merchantId,
         fonbnkOrderId: data?.orderId,
+        fonbnkOrderParams: data?.orderParams,
       });
 
       setCartItems([]);

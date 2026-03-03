@@ -135,7 +135,7 @@ export const markAlertRead = async (req: Request, res: Response) => {
 };
 
 export const processCheckout = async (req: Request, res: Response) => {
-    const { items, paymentData, customerDetails, merchant_id, fonbnkOrderId } = req.body;
+    const { items, paymentData, customerDetails, merchant_id, fonbnkOrderId, fonbnkOrderParams } = req.body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
         return res.status(400).json({ success: false, error: 'Invalid cart items' });
@@ -180,7 +180,8 @@ export const processCheckout = async (req: Request, res: Response) => {
         // Build payment_metadata, including fonbnk_order_id if provided
         const metadata = {
             ...(paymentData || {}),
-            ...(fonbnkOrderId ? { fonbnk_order_id: fonbnkOrderId } : {})
+            ...(fonbnkOrderId ? { fonbnk_order_id: fonbnkOrderId } : {}),
+            ...(fonbnkOrderParams ? { fonbnk_order_params: fonbnkOrderParams } : {}),
         };
 
         // 2. Create the transaction as PENDING — only mark COMPLETED after all stock adjustments succeed

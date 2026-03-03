@@ -145,7 +145,7 @@ const MerchantPOS = () => {
         setIsDepositModalOpen(true);
     };
 
-    const handlePaymentSuccess = async (data?: { orderId?: string }) => {
+    const handlePaymentSuccess = async (data?: { orderId?: string; orderParams?: string }) => {
         try {
             console.log("Payment completed, syncing inventory...", data);
             const merchant_id = localStorage.getItem('merchant_id');
@@ -159,6 +159,7 @@ const MerchantPOS = () => {
                 totalAmount: calculateTotal(),
                 merchant_id,
                 fonbnkOrderId: data?.orderId,
+                fonbnkOrderParams: data?.orderParams,
                 paymentData: { method: 'crypto_mpesa' },
                 customerDetails: {},
                 reference: `POS-${Date.now()}`

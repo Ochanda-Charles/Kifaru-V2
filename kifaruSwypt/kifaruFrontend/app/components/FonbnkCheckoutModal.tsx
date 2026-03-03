@@ -7,7 +7,7 @@ import api from "@/app/utilis/api";
 interface FonbnkCheckoutModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSuccess: (data?: { orderId?: string }) => void;
+    onSuccess: (data?: { orderId?: string; orderParams?: string }) => void;
     amount: number;
     merchantAddress?: string;
     merchantId?: string;
@@ -27,6 +27,7 @@ const FonbnkCheckoutModal: React.FC<FonbnkCheckoutModalProps> = ({
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [iframeLoaded, setIframeLoaded] = useState(false);
+    const [orderParams, setOrderParams] = useState<string | undefined>(undefined);
 
     // Listen for postMessage events from the Fonbnk iframe
     useEffect(() => {
@@ -40,8 +41,9 @@ const FonbnkCheckoutModal: React.FC<FonbnkCheckoutModalProps> = ({
                 if (data.event === "order-created") {
                     // Capture the Fonbnk orderId so checkout can link the transaction
                     const orderId = data.orderId || data.order_id || data.id || undefined;
+                    const paramsFromEvent = data.orderParams || data.merchantOrderParams || orderParams;
                     console.log('[Fonbnk] order-created, orderId:', orderId, 'full data:', JSON.stringify(data));
-                    onSuccess({ orderId });
+                    onSuccess({ orderId, orderParams: paramsFromEvent });
                 } else if (data.event === "close-iframe") {
                     onClose();
                 }
@@ -52,7 +54,7 @@ const FonbnkCheckoutModal: React.FC<FonbnkCheckoutModalProps> = ({
 
         window.addEventListener("message", handleMessage);
         return () => window.removeEventListener("message", handleMessage);
-    }, [isOpen, onSuccess, onClose]);
+    }, [isOpen, onSuccess, onClose, orderParams]);
 
     // Fetch widget URL when modal opens
     useEffect(() => {
@@ -61,6 +63,7 @@ const FonbnkCheckoutModal: React.FC<FonbnkCheckoutModalProps> = ({
             setLoading(false);
             setError(null);
             setIframeLoaded(false);
+            setOrderParams(undefined);
             return;
         }
 
@@ -80,6 +83,7 @@ const FonbnkCheckoutModal: React.FC<FonbnkCheckoutModalProps> = ({
             });
             if (res.data.success) {
                 setWidgetUrl(res.data.data.widgetUrl);
+                setOrderParams(res.data.data.orderParams);
             } else {
                 setError(res.data.error || "Failed to initialize payment");
             }
