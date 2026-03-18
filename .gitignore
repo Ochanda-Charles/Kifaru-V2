@@ -19,9 +19,19 @@ coverage/
 *.env
 *.env.*
 
-# Agent & System Files
-AGENT_PROMPTS.md
+# AI Tools & Agents
+.claude/
+.serena/
+.agent/
 .gemini/
+.cursor/
+.cursorrules
+.aider*
+.copilot/
+CLAUDE.md
+AGENT_PROMPTS.md
+
+# IDE & System Files
 .vscode/
 .idea/
 .DS_Store

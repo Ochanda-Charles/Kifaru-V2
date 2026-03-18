@@ -1,6 +1,6 @@
 # Database Migrations
 
-This directory contains database migration scripts for the KifaruSwypt backend.
+This directory contains database migration scripts for the Kifaru backend.
 
 ## Prerequisites
 
