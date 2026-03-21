@@ -562,35 +562,35 @@ export const syncOrders = async (req: Request, res: Response) => {
         const MAX_PAGES = 10; // safety limit
 
         for (let page = 0; page < MAX_PAGES; page++) {
-            const endpoint = cursor
+            const ep: string = cursor
                 ? `/api/onramp/orders?limit=100&cursor=${encodeURIComponent(cursor)}`
                 : '/api/onramp/orders?limit=100';
-            const url = `${fonbnkApiBase}${endpoint}`;
-            let headers: Record<string, string>;
+            const reqUrl: string = `${fonbnkApiBase}${ep}`;
+            let hdrs: Record<string, string>;
             try {
-                headers = buildFonbnkApiHeaders(endpoint);
+                hdrs = buildFonbnkApiHeaders(ep);
             } catch (err: any) {
                 console.error('[Fonbnk Sync] Header build failed:', err.message);
                 return res.status(500).json({ success: false, error: err.message });
             }
 
-            console.log(`[Fonbnk Sync] Calling ${url} (page ${page + 1})`);
-            const response = await fetch(url, { headers });
+            console.log(`[Fonbnk Sync] Calling ${reqUrl} (page ${page + 1})`);
+            const apiRes = await fetch(reqUrl, { headers: hdrs });
 
-            if (!response.ok) {
-                const text = await response.text();
-                console.error(`[Fonbnk Sync] API error ${response.status}: ${text}`);
+            if (!apiRes.ok) {
+                const text = await apiRes.text();
+                console.error(`[Fonbnk Sync] API error ${apiRes.status}: ${text}`);
                 return res.status(502).json({
                     success: false,
-                    error: `Fonbnk API returned ${response.status}: ${text.substring(0, 200)}`,
+                    error: `Fonbnk API returned ${apiRes.status}: ${text.substring(0, 200)}`,
                 });
             }
 
-            const body = await response.json();
-            const pageOrders: any[] = Array.isArray(body) ? body : (body?.list || body?.data || []);
+            const apiBody: any = await apiRes.json();
+            const pageOrders: any[] = Array.isArray(apiBody) ? apiBody : (apiBody?.list || apiBody?.data || []);
             allOrders.push(...pageOrders);
 
-            cursor = body?.nextCursor || null;
+            cursor = apiBody?.nextCursor || null;
             if (!cursor || pageOrders.length === 0) break;
         }
 
@@ -634,7 +634,7 @@ export const syncOrders = async (req: Request, res: Response) => {
                 }
                 // If wallet didn't match and there's only one wallet, assign to those merchants
                 if (ownerMerchantIds.length === 0 && walletToMerchants.size === 1) {
-                    ownerMerchantIds = walletToMerchants.values().next().value;
+                    ownerMerchantIds = walletToMerchants.values().next().value || [];
                 }
                 if (ownerMerchantIds.length === 0) {
                     unmatched++;
