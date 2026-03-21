@@ -6,6 +6,7 @@ import {
     Tag,
     Card,
     Select,
+    Button,
     Typography,
     message,
     Statistic,
@@ -21,6 +22,7 @@ import {
     ClockCircleOutlined,
     CloseCircleOutlined,
     InfoCircleOutlined,
+    SyncOutlined,
 } from "@ant-design/icons";
 import type { ColumnsType, TablePaginationConfig } from "antd/es/table";
 import api from "@/app/utilis/api";
@@ -81,6 +83,7 @@ interface State {
     initialLoad: boolean;
     statusFilter: string;
     selectedTx: Transaction | null;
+    syncing: boolean;
 }
 
 type Action =
@@ -93,7 +96,9 @@ type Action =
     }
     | { type: "FETCH_ERROR" }
     | { type: "SET_FILTER"; status: string }
-    | { type: "SELECT_TX"; tx: Transaction | null };
+    | { type: "SELECT_TX"; tx: Transaction | null }
+    | { type: "SYNC_START" }
+    | { type: "SYNC_END" };
 
 const initialState: State = {
     transactions: [],
@@ -103,6 +108,7 @@ const initialState: State = {
     initialLoad: true,
     statusFilter: "ALL",
     selectedTx: null,
+    syncing: false,
 };
 
 function reducer(state: State, action: Action): State {
@@ -124,6 +130,10 @@ function reducer(state: State, action: Action): State {
             return { ...state, statusFilter: action.status };
         case "SELECT_TX":
             return { ...state, selectedTx: action.tx };
+        case "SYNC_START":
+            return { ...state, syncing: true };
+        case "SYNC_END":
+            return { ...state, syncing: false };
         default:
             return state;
     }
@@ -250,7 +260,6 @@ SummaryCards.displayName = "SummaryCards";
 const TransactionsPage = () => {
     const [state, dispatch] = useReducer(reducer, initialState);
     const abortRef = useRef<AbortController | null>(null);
-    const hasFetched = useRef(false);
     const requestIdRef = useRef(0);
 
     const fetchTransactions = async (page: number, status: string) => {
@@ -287,6 +296,9 @@ const TransactionsPage = () => {
                     pagination,
                     summary: getSummary(transactions),
                 });
+            } else {
+                message.error(res.data.error || "Failed to load transactions.");
+                dispatch({ type: "FETCH_ERROR" });
             }
         } catch (err: any) {
             if (err?.code === "ERR_CANCELED") return;
@@ -305,12 +317,39 @@ const TransactionsPage = () => {
         }
     };
 
-    useEffect(() => {
-        // Guard against React Strict Mode double-mount
-        if (hasFetched.current) return;
-        hasFetched.current = true;
+    const syncFonbnkOrders = async () => {
+        dispatch({ type: "SYNC_START" });
+        try {
+            const res = await api.get("/fonbnk/sync-orders");
+            if (res.data.success) {
+                const d = res.data.data;
+                if (d?.created > 0) {
+                    message.success(`Synced ${d.created} new transaction(s) from Fonbnk`);
+                    return true;
+                }
+                if (d?.total === 0) {
+                    message.info("No orders found in Fonbnk");
+                } else if (d?.skipped > 0 || d?.unmatched > 0) {
+                    message.info(`Fonbnk: ${d.total} orders found, ${d.skipped} already synced, ${d.unmatched || 0} unmatched wallet`);
+                }
+            } else {
+                message.warning(res.data.error || "Sync returned no data");
+            }
+        } catch (err: any) {
+            const errMsg = err?.response?.data?.error || err.message;
+            message.error(`Fonbnk sync failed: ${errMsg}`);
+            console.error("Fonbnk sync error:", errMsg);
+        } finally {
+            dispatch({ type: "SYNC_END" });
+        }
+        return false;
+    };
 
-        fetchTransactions(1, "ALL");
+    useEffect(() => {
+        // Sync Fonbnk orders first, then fetch transactions
+        syncFonbnkOrders().then((hadNew) => {
+            fetchTransactions(1, "ALL");
+        });
 
         return () => {
             abortRef.current?.abort();
@@ -318,7 +357,7 @@ const TransactionsPage = () => {
     }, []);
 
     // ── Derived values ─────────────────────────────────────────────────
-    const { transactions, pagination, summary, tableLoading, statusFilter, selectedTx } = state;
+    const { transactions, pagination, summary, tableLoading, statusFilter, selectedTx, syncing } = state;
 
     // ── Handlers ───────────────────────────────────────────────────────
 
@@ -441,12 +480,24 @@ const TransactionsPage = () => {
                     <Title level={3} style={{ margin: 0 }}>Transaction Log</Title>
                     <Text type="secondary">All payment transactions from your store</Text>
                 </div>
-                <Select
-                    value={statusFilter}
-                    onChange={handleFilterChange}
-                    style={{ width: 160 }}
-                    options={FILTER_OPTIONS}
-                />
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <Button
+                        icon={<SyncOutlined spin={syncing} />}
+                        loading={syncing}
+                        onClick={async () => {
+                            const hadNew = await syncFonbnkOrders();
+                            if (hadNew) fetchTransactions(pagination.page, statusFilter);
+                        }}
+                    >
+                        Sync Fonbnk
+                    </Button>
+                    <Select
+                        value={statusFilter}
+                        onChange={handleFilterChange}
+                        style={{ width: 160 }}
+                        options={FILTER_OPTIONS}
+                    />
+                </div>
             </div>
 
             {/* Summary cards — isolated component, only re-renders when props change */}

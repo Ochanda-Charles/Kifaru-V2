@@ -60,4 +60,23 @@ router.get('/transactions/:id', verifyToken, asyncHandler(getTransactionById));
 // Public Checkout Endpoint
 router.post('/checkout', asyncHandler(processCheckout));
 
+// Diagnostic: check raw transaction count (remove in production)
+router.get('/transactions-debug', verifyToken, asyncHandler(async (req: any, res: any) => {
+    const { sqlConfig } = await import('../config/sqlConfig');
+    const merchant_id = req.info?.merchant_id;
+
+    const [allCount, merchantCount, sample] = await Promise.all([
+        sqlConfig.query('SELECT COUNT(*)::int as count FROM Transactions'),
+        sqlConfig.query('SELECT COUNT(*)::int as count FROM Transactions WHERE merchant_id = $1', [merchant_id]),
+        sqlConfig.query('SELECT id, merchant_id, total_amount, status, created_at FROM Transactions ORDER BY created_at DESC LIMIT 5'),
+    ]);
+
+    res.json({
+        your_merchant_id: merchant_id,
+        total_transactions_in_db: allCount.rows[0].count,
+        transactions_for_your_merchant: merchantCount.rows[0].count,
+        latest_5_transactions: sample.rows,
+    });
+}));
+
 export default router;

@@ -76,7 +76,7 @@ const FonbnkCheckoutModal: React.FC<FonbnkCheckoutModalProps> = ({
         setLoading(true);
         setError(null);
         try {
-            const res = await api.post("/swypt/widget-url", {
+            const res = await api.post("/fonbnk/widget-url", {
                 amount,
                 merchantWalletAddress: merchantAddress,
                 merchant_id: merchantId,

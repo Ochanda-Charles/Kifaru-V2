@@ -313,9 +313,17 @@ export const handleWebhook = async (req: Request, res: Response) => {
                 matchValues.push(JSON.stringify(customerPhone));
             }
 
+            // Only update status if the webhook status is "higher priority" than the current status.
+            // COMPLETED > FAILED > PENDING — never downgrade a COMPLETED transaction.
+            const statusUpdate = dbStatus === 'COMPLETED'
+                ? `status = 'COMPLETED'`
+                : dbStatus === 'FAILED'
+                    ? `status = CASE WHEN status = 'COMPLETED' THEN status ELSE $1 END`
+                    : `status = CASE WHEN status IN ('COMPLETED', 'FAILED') THEN status ELSE $1 END`;
+
             const updateByOrderQuery = `
                 UPDATE Transactions
-                SET status = $1,
+                SET ${statusUpdate},
                     payment_metadata = jsonb_set(
                         COALESCE(payment_metadata, '{}'::jsonb),
                         '{fonbnk_webhook}',
@@ -323,11 +331,11 @@ export const handleWebhook = async (req: Request, res: Response) => {
                         true
                     )${customerUpdate}
                 WHERE ${matchConditions.join(' OR ')}
-                RETURNING id`;
+                RETURNING id, status`;
 
             const orderMatch = await sqlConfig.query(updateByOrderQuery, matchValues);
             updatedRows += orderMatch.rowCount || 0;
-            console.log(`Transaction update by order id/params: ${orderMatch.rowCount} row(s) affected`);
+            console.log(`Transaction update by order id/params: ${orderMatch.rowCount} row(s) affected, statuses: ${orderMatch.rows.map((r: any) => r.status).join(', ')}`);
         }
 
         // 2) Fallback match by amount (and wallet when available)
@@ -376,15 +384,47 @@ export const handleWebhook = async (req: Request, res: Response) => {
             console.log(`Fallback update: ${fallback.rowCount} row(s) affected`);
         }
 
-        // 3) Last fallback: create a new transaction from webhook if we can map to a merchant wallet
-        if (updatedRows === 0 && localCurrencyAmount !== null && walletAddress) {
-            const merchant = await sqlConfig.query(
+        // 3) Last fallback: create a new transaction from webhook data
+        if (updatedRows === 0 && localCurrencyAmount !== null) {
+            // Idempotency: skip if a transaction with this fonbnk_order_id already exists
+            if (orderId) {
+                const existing = await sqlConfig.query(
+                    `SELECT id FROM Transactions WHERE payment_metadata->>'fonbnk_order_id' = $1 LIMIT 1`,
+                    [orderId]
+                );
+                if ((existing.rowCount || 0) > 0) {
+                    console.log(`[Fonbnk] Transaction for order ${orderId} already exists (${existing.rows[0].id}), skipping creation`);
+                    return res.status(200).json({ received: true });
+                }
+            }
+
+            // Try to resolve merchant: by wallet address first, then by default wallet
+            const lookupWallet = walletAddress || DEFAULT_MERCHANT_WALLET;
+            let merchant = await sqlConfig.query(
                 `SELECT merchant_id
                  FROM merchants
                  WHERE LOWER(COALESCE(wallet_address, '')) = LOWER($1)
                  LIMIT 1`,
-                [walletAddress]
+                [lookupWallet]
             );
+
+            // If wallet-based lookup fails and we used the webhook wallet, try the default
+            if ((merchant.rowCount || 0) === 0 && walletAddress && walletAddress !== DEFAULT_MERCHANT_WALLET) {
+                merchant = await sqlConfig.query(
+                    `SELECT merchant_id
+                     FROM merchants
+                     WHERE LOWER(COALESCE(wallet_address, '')) = LOWER($1)
+                     LIMIT 1`,
+                    [DEFAULT_MERCHANT_WALLET]
+                );
+            }
+
+            // Last resort: pick any merchant that exists
+            if ((merchant.rowCount || 0) === 0) {
+                merchant = await sqlConfig.query(
+                    `SELECT merchant_id FROM merchants LIMIT 1`
+                );
+            }
 
             const merchantId = merchant.rows[0]?.merchant_id;
             if (merchantId) {
@@ -414,9 +454,9 @@ export const handleWebhook = async (req: Request, res: Response) => {
                     ]
                 );
                 updatedRows += inserted.rowCount || 0;
-                console.log(`[Fonbnk] Inserted transaction ${inserted.rows[0]?.id} from webhook fallback`);
+                console.log(`[Fonbnk] Inserted transaction ${inserted.rows[0]?.id} for merchant ${merchantId} from webhook`);
             } else {
-                console.warn('[Fonbnk] Could not map webhook wallet to a merchant. No transaction created.');
+                console.warn('[Fonbnk] No merchants found in DB. Cannot create transaction from webhook.');
             }
         }
 
@@ -426,5 +466,255 @@ export const handleWebhook = async (req: Request, res: Response) => {
     } catch (err: any) {
         console.error('Fonbnk webhook error:', err.message);
         return res.status(500).json({ error: 'Webhook processing failed' });
+    }
+};
+
+/**
+ * Build Fonbnk server-to-server API request headers.
+ *
+ * Auth requires three headers:
+ *   x-client-id:  Client ID from Fonbnk dashboard
+ *   x-timestamp:  Current Unix time in milliseconds
+ *   x-signature:  HMAC-SHA256( "{timestamp}:{endpoint}" , base64Decode(secret) ) → base64
+ */
+const buildFonbnkApiHeaders = (endpoint: string): Record<string, string> => {
+    const clientId = process.env.FONBNK_CLIENT_ID;
+    const secret = process.env.FONBNK_API_SIGNATURE_SECRET;
+
+    if (!clientId || !secret) {
+        throw new Error('FONBNK_CLIENT_ID and FONBNK_API_SIGNATURE_SECRET must be set');
+    }
+
+    const timestamp = Date.now().toString();
+
+    // Fonbnk requires base64-decoding the secret before using it as the HMAC key.
+    // Pad the secret to a valid base64 length if needed.
+    const padded = secret + '='.repeat((4 - (secret.length % 4)) % 4);
+    const keyBuffer = Buffer.from(padded, 'base64');
+
+    const signature = crypto
+        .createHmac('sha256', keyBuffer)
+        .update(`${timestamp}:${endpoint}`)
+        .digest('base64');
+
+    return {
+        'x-client-id': clientId,
+        'x-timestamp': timestamp,
+        'x-signature': signature,
+        'Accept': 'application/json',
+    };
+};
+
+/**
+ * Sync orders from Fonbnk API into the local Transactions table.
+ *
+ * GET /fonbnk/sync-orders
+ *
+ * Calls GET /api/onramp/orders on the Fonbnk server-to-server API,
+ * then for each order matches it to a merchant by wallet address and
+ * inserts a transaction. Orders whose wallet doesn't match any merchant
+ * are skipped — so each merchant only sees their own orders.
+ */
+export const syncOrders = async (req: Request, res: Response) => {
+    try {
+        const merchant_id = (req as any).info?.merchant_id;
+        if (!merchant_id) {
+            return res.status(401).json({ success: false, error: 'Unauthorized' });
+        }
+
+        const fonbnkApiBase = process.env.FONBNK_API_BASE_URL || 'https://sandbox-api.fonbnk.com';
+
+        if (!process.env.FONBNK_CLIENT_ID || !process.env.FONBNK_API_SIGNATURE_SECRET) {
+            return res.status(500).json({
+                success: false,
+                error: 'Fonbnk API credentials not configured (FONBNK_CLIENT_ID, FONBNK_API_SIGNATURE_SECRET)',
+            });
+        }
+
+        // 1. Build a wallet→merchant_ids lookup (multiple merchants can share a wallet)
+        const merchantRows = await sqlConfig.query(
+            `SELECT merchant_id, LOWER(wallet_address) as wallet FROM merchants WHERE wallet_address IS NOT NULL`
+        );
+        const walletToMerchants = new Map<string, string[]>();
+        for (const row of merchantRows.rows) {
+            const list = walletToMerchants.get(row.wallet) || [];
+            list.push(row.merchant_id);
+            walletToMerchants.set(row.wallet, list);
+        }
+
+        // Also get the requesting merchant's wallet for logging
+        const callerWallet = await sqlConfig.query(
+            `SELECT wallet_address FROM merchants WHERE merchant_id = $1`,
+            [merchant_id]
+        );
+        console.log(`[Fonbnk Sync] Merchant ${merchant_id}, wallet: ${callerWallet.rows[0]?.wallet_address || 'NOT SET'}, ${walletToMerchants.size} unique wallets loaded`);
+
+        if (walletToMerchants.size === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'No merchants have wallet addresses configured. Set your wallet address first.',
+            });
+        }
+
+        // 2. Fetch on-ramp orders from Fonbnk API (paginated via cursor)
+        const allOrders: any[] = [];
+        let cursor: string | null = null;
+        const MAX_PAGES = 10; // safety limit
+
+        for (let page = 0; page < MAX_PAGES; page++) {
+            const endpoint = cursor
+                ? `/api/onramp/orders?limit=100&cursor=${encodeURIComponent(cursor)}`
+                : '/api/onramp/orders?limit=100';
+            const url = `${fonbnkApiBase}${endpoint}`;
+            let headers: Record<string, string>;
+            try {
+                headers = buildFonbnkApiHeaders(endpoint);
+            } catch (err: any) {
+                console.error('[Fonbnk Sync] Header build failed:', err.message);
+                return res.status(500).json({ success: false, error: err.message });
+            }
+
+            console.log(`[Fonbnk Sync] Calling ${url} (page ${page + 1})`);
+            const response = await fetch(url, { headers });
+
+            if (!response.ok) {
+                const text = await response.text();
+                console.error(`[Fonbnk Sync] API error ${response.status}: ${text}`);
+                return res.status(502).json({
+                    success: false,
+                    error: `Fonbnk API returned ${response.status}: ${text.substring(0, 200)}`,
+                });
+            }
+
+            const body = await response.json();
+            const pageOrders: any[] = Array.isArray(body) ? body : (body?.list || body?.data || []);
+            allOrders.push(...pageOrders);
+
+            cursor = body?.nextCursor || null;
+            if (!cursor || pageOrders.length === 0) break;
+        }
+
+        const orders = allOrders;
+        console.log(`[Fonbnk Sync] Found ${orders.length} total orders from Fonbnk API`);
+
+        let created = 0;
+        let skipped = 0;
+        let unmatched = 0;
+        let failed = 0;
+
+        for (const order of orders) {
+            try {
+                const orderId = order?.orderId || order?._id || order?.id;
+                const status = order?.status;
+                const dbStatus = mapStatus(status);
+
+                // Fonbnk onramp response has flat fields: localCurrencyAmount, amount, amountCrypto
+                const localCurrencyAmount = pickNumber(
+                    order?.localCurrencyAmount,
+                    order?.deposit?.cashout?.amountAfterFees,
+                    order?.amount,
+                );
+
+                if (localCurrencyAmount === null) {
+                    skipped++;
+                    continue;
+                }
+
+                // Match order to merchant(s) by wallet address
+                // Fonbnk uses flat "address" field for the payout wallet
+                const orderWallet = pickString(
+                    order?.address,
+                    order?.walletAddress,
+                    order?.payout?.transaction?.meta?.walletAddress,
+                );
+
+                let ownerMerchantIds: string[] = [];
+                if (orderWallet) {
+                    ownerMerchantIds = walletToMerchants.get(orderWallet.toLowerCase()) || [];
+                }
+                // If wallet didn't match and there's only one wallet, assign to those merchants
+                if (ownerMerchantIds.length === 0 && walletToMerchants.size === 1) {
+                    ownerMerchantIds = walletToMerchants.values().next().value;
+                }
+                if (ownerMerchantIds.length === 0) {
+                    unmatched++;
+                    continue;
+                }
+
+                // Fonbnk uses flat fields: orderParams, asset, network, phoneNumber, amountCrypto
+                const orderParams = pickString(order?.orderParams, order?.merchantOrderParams);
+                const asset = pickString(order?.asset, order?.payout?.currencyCode);
+                const network = pickString(order?.network, order?.payout?.transaction?.meta?.network);
+                const customerPhone = pickString(order?.phoneNumber, order?.phone, order?.msisdn);
+                const cryptoAmount = pickNumber(order?.amountCrypto, order?.amount);
+                const carrier = pickString(order?.carrierId, order?.carrier);
+
+                const paymentMetadata = {
+                    ...(orderId ? { fonbnk_order_id: orderId } : {}),
+                    ...(orderParams ? { fonbnk_order_params: orderParams } : {}),
+                    fonbnk_webhook: {
+                        event: 'synced-from-api',
+                        orderId,
+                        orderParams,
+                        status,
+                        localCurrencyAmount,
+                        cryptoAmount,
+                        network,
+                        asset,
+                        walletAddress: orderWallet,
+                        customerPhone,
+                        carrier,
+                        received_at: new Date().toISOString(),
+                    },
+                };
+
+                // Create a transaction for each merchant that owns this wallet (skip if already exists per merchant)
+                let insertedAny = false;
+                for (const mid of ownerMerchantIds) {
+                    if (orderId) {
+                        const existing = await sqlConfig.query(
+                            `SELECT id FROM Transactions WHERE merchant_id = $1 AND payment_metadata->>'fonbnk_order_id' = $2 LIMIT 1`,
+                            [mid, orderId]
+                        );
+                        if ((existing.rowCount || 0) > 0) continue;
+                    }
+                    await sqlConfig.query(
+                        `INSERT INTO Transactions (id, merchant_id, total_amount, currency, status, customer_details, payment_metadata)
+                         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb)`,
+                        [
+                            uuid(),
+                            mid,
+                            localCurrencyAmount,
+                            DEFAULT_CURRENCY,
+                            dbStatus,
+                            JSON.stringify(customerPhone ? { phone: customerPhone } : {}),
+                            JSON.stringify(paymentMetadata),
+                        ]
+                    );
+                    insertedAny = true;
+                }
+                if (insertedAny) created++; else skipped++;
+            } catch (orderErr: any) {
+                console.error(`[Fonbnk Sync] Error processing order:`, orderErr.message);
+                failed++;
+            }
+        }
+
+        console.log(`[Fonbnk Sync] Done: ${created} created, ${skipped} skipped, ${unmatched} unmatched, ${failed} failed out of ${orders.length} orders`);
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                total: orders.length,
+                created,
+                skipped,
+                unmatched,
+                failed,
+            },
+        });
+
+    } catch (err: any) {
+        console.error('[Fonbnk Sync] Error:', err.message);
+        return res.status(500).json({ success: false, error: 'Failed to sync Fonbnk orders' });
     }
 };

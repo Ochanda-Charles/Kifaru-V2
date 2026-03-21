@@ -18,10 +18,14 @@ export const getTransactions = async (req: ExtendedUserRequest, res: Response) =
         const offset = (page - 1) * limit;
         const status = (req.query.status as string)?.toUpperCase();
 
+        console.log(`[Transactions] Fetching for merchant=${merchant_id}, page=${page}, limit=${limit}, status=${status || 'ALL'}`);
+
         const [transactions, total] = await Promise.all([
             transactionRepository.getTransactionsByMerchant(merchant_id, limit, offset, status),
             transactionRepository.getTransactionCount(merchant_id, status)
         ]);
+
+        console.log(`[Transactions] Found ${transactions.length} rows, total=${total}`);
 
         return res.status(200).json({
             success: true,

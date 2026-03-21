@@ -136,6 +136,7 @@ export const markAlertRead = async (req: Request, res: Response) => {
 
 export const processCheckout = async (req: Request, res: Response) => {
     const { items, paymentData, customerDetails, merchant_id, fonbnkOrderId, fonbnkOrderParams } = req.body;
+    console.log(`[Checkout] Started: merchant_id=${merchant_id}, items=${items?.length}, fonbnkOrderId=${fonbnkOrderId}`);
 
     if (!items || !Array.isArray(items) || items.length === 0) {
         return res.status(400).json({ success: false, error: 'Invalid cart items' });
@@ -216,6 +217,7 @@ export const processCheckout = async (req: Request, res: Response) => {
         );
 
         await client.query('COMMIT');
+        console.log(`[Checkout] Success: transaction=${transaction.id}, merchant=${resolvedMerchantId}, amount=${totalAmount}`);
 
         return res.status(200).json({ success: true, transactionId: transaction.id });
 

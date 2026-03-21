@@ -21,7 +21,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 app.use('/api', router);
 app.use('/api/inventory', inventoryRoutes);
-app.use('/api/swypt', fonbnkRoutes);
+app.use('/api/fonbnk', fonbnkRoutes);
 
 app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
     console.error('Unhandled Error:', error);

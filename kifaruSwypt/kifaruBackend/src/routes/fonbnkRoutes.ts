@@ -1,7 +1,9 @@
 import { Router } from 'express';
+import { verifyToken } from '../middlewares/VerifyToken';
 import {
     getWidgetUrl,
-    handleWebhook
+    handleWebhook,
+    syncOrders
 } from '../controllers/fonbnkController';
 
 const router = Router();
@@ -15,5 +17,8 @@ router.post('/widget-url', asyncHandler(getWidgetUrl));
 
 // Webhook endpoint for Fonbnk payment notifications
 router.post('/webhook', asyncHandler(handleWebhook));
+
+// Sync completed orders from Fonbnk API into local Transactions table
+router.get('/sync-orders', verifyToken, asyncHandler(syncOrders));
 
 export default router;
