@@ -6,6 +6,10 @@ import axios from 'axios';
 
 const { Dragger } = Upload;
 
+// Dedicated axios instance for Cloudinary uploads — the default instance has
+// a global Authorization header (set in dashboard layout) that Cloudinary rejects.
+const cloudinaryAxios = axios.create();
+
 interface CloudinaryUploadProps {
     onUploadSuccess: (url: string) => void;
     onRemove?: () => void;
@@ -34,7 +38,7 @@ const CloudinaryUpload: React.FC<CloudinaryUploadProps> = ({
         formData.append('folder', folder);
 
         try {
-            const response = await axios.post(
+            const response = await cloudinaryAxios.post(
                 `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,
                 formData,
                 {
@@ -54,6 +58,7 @@ const CloudinaryUpload: React.FC<CloudinaryUploadProps> = ({
         } catch (error) {
             console.error('Upload error:', error);
             message.error('Image upload failed. Please try again.');
+            throw error;
         } finally {
             setLoading(false);
         }
@@ -70,9 +75,12 @@ const CloudinaryUpload: React.FC<CloudinaryUploadProps> = ({
         multiple: false,
         listType: 'picture',
         showUploadList: false,
-        customRequest: ({ file, onSuccess }) => {
-            handleUpload(file as File);
-            if (onSuccess) onSuccess("ok");
+        customRequest: ({ file, onSuccess, onError }) => {
+            handleUpload(file as File).then(() => {
+                if (onSuccess) onSuccess("ok");
+            }).catch((err) => {
+                if (onError) onError(err as Error);
+            });
         },
         accept: "image/*"
     };

@@ -17,7 +17,7 @@ import {
     Modal,
 } from "antd";
 import {
-    DollarOutlined,
+    TransactionOutlined,
     CheckCircleOutlined,
     ClockCircleOutlined,
     CloseCircleOutlined,
@@ -226,7 +226,7 @@ const SummaryCards = React.memo(
                     <Statistic
                         title="Total Transactions"
                         value={total}
-                        prefix={<DollarOutlined />}
+                        prefix={<TransactionOutlined />}
                     />
                 </Card>
             </Col>

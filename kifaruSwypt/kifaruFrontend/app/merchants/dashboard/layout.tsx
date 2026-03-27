@@ -104,7 +104,7 @@ export default function DashboardLayout({
                     }}
                 >
                     <Title level={4} style={{ margin: 0, color: '#16a34a', fontWeight: 'bold' }}>
-                        {collapsed ? 'K' : 'KIFARU SWYPT'}
+                        {collapsed ? 'K' : 'KIFARU'}
                     </Title>
                 </div>
                 <Menu

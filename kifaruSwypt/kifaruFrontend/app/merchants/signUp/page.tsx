@@ -75,7 +75,7 @@ const SignupPage: React.FC = () => {
               <span className="text-green-600 font-black text-2xl transform -rotate-3">K</span>
             </div>
             <h1 className="text-3xl font-black text-gray-900 tracking-tight">Create Account</h1>
-            <p className="text-gray-500 text-sm mt-1">Join Kifaru Swypt as a Merchant</p>
+            <p className="text-gray-500 text-sm mt-1">Join Kifaru as a Merchant</p>
           </div>
 
           {error && (
@@ -175,7 +175,7 @@ const SignupPage: React.FC = () => {
         {/* Back to Home Link */}
         <div className="text-center mt-6">
           <Link href="/" className="text-gray-400 hover:text-gray-600 text-sm transition-colors">
-            ← Back to Kifaru Swypt Home
+            ← Back to Kifaru Home
           </Link>
         </div>
       </div>

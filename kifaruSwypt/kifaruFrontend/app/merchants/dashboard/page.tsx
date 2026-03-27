@@ -430,10 +430,9 @@ const MerchantDashboard: React.FC = () => {
       title: "Price",
       dataIndex: "price",
       key: "price",
-      // render: (price: number) => `$${price.toFixed(2)}`,
       render: (price: any) => {
         const num = Number(price);
-        return isNaN(num) ? "$0.00" : `$${num.toFixed(2)}`;
+        return isNaN(num) ? "KES 0.00" : `KES ${num.toFixed(2)}`;
       }
 
     },
@@ -487,36 +486,26 @@ const MerchantDashboard: React.FC = () => {
     }
 
     if (key === 'view-wallet') {
-      console.log('Wallet menu clicked');
-
       try {
         const response = await api.get(`/getWallet/${merchant_id}`);
-
         const address = response.data.wallet_address;
-        console.log('Fetched address:', address);
 
         if (address && address.trim() !== '') {
           setSavedWalletAddress(address);
           localStorage.setItem('your_wallet_address', address);
-        } else {
-          message.info('No wallet address found. Please save one first.');
-          handleMenuClick({ key: 'my Wallet' });
         }
-
       } catch (error: any) {
-        console.error('Error fetching wallet address:', error);
-
-        // Axios error handling:
         const status = error.response?.status;
         const msg = error.response?.data?.message;
 
         if (status === 404 && msg === 'Wallet not found') {
-          message.info('No wallet address found. Please save one first.');
-          handleMenuClick({ key: 'my Wallet' });
+          setSavedWalletAddress("");
         } else {
           message.error('Error fetching wallet address');
         }
       }
+
+      setWalletModalVisible(true);
     }
 
   };
@@ -539,7 +528,6 @@ const MerchantDashboard: React.FC = () => {
         <div style={{ display: "flex", gap: 24, flex: 1 }}>
           {[
             { key: "view-transactions", title: "View Transactions", icon: <DollarOutlined /> },
-            { title: "View Orders", icon: <ShopOutlined /> },
             { key: "view-wallet", title: "View Wallet Address", icon: <UserOutlined /> },
           ].map((card) => (
             <div
@@ -708,6 +696,7 @@ const MerchantDashboard: React.FC = () => {
       <WalletSetupModal
         visible={walletModalVisible}
         merchant_id={merchant_id}
+        currentWallet={savedWalletAddress}
         onClose={() => setWalletModalVisible(false)}
         onSubmit={(address) => {
           setSavedWalletAddress(address);

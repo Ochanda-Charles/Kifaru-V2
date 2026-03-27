@@ -182,7 +182,7 @@ const LoginPage: React.FC = () => {
         {/* Back to Home Link */}
         <div className="text-center mt-6">
           <Link href="/" className="text-gray-400 hover:text-gray-600 text-sm transition-colors">
-            ← Back to Kifaru Swypt Home
+            ← Back to Kifaru Home
           </Link>
         </div>
       </div>

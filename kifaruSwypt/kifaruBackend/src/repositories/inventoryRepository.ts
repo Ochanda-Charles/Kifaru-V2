@@ -187,7 +187,7 @@ export const inventoryRepository = {
                 COALESCE(SUM(quantity), 0) as total_units,
                 COALESCE(SUM(quantity * price), 0) as total_value,
                 COALESCE(AVG(price), 0) as avg_price,
-                COUNT(CASE WHEN quantity <= 10 AND quantity > 0 THEN 1 END) as low_stock_count,
+                COUNT(CASE WHEN quantity <= COALESCE(low_stock_threshold, 10) AND quantity > 0 THEN 1 END) as low_stock_count,
                 COUNT(CASE WHEN quantity = 0 THEN 1 END) as out_of_stock_count
             FROM Products
             WHERE merchant_id = $1
@@ -243,13 +243,13 @@ export const inventoryRepository = {
     },
 
 
-    getLowStockProducts: async (merchantId: string, threshold: number = 10): Promise<any[]> => {
+    getLowStockProducts: async (merchantId: string): Promise<any[]> => {
         const query = `
-      SELECT * FROM Products 
-      WHERE merchant_id = $1 AND quantity <= $2 
+      SELECT * FROM Products
+      WHERE merchant_id = $1 AND quantity <= COALESCE(low_stock_threshold, 10)
       ORDER BY quantity ASC
     `;
-        const result = await sqlConfig.query(query, [merchantId, threshold]);
+        const result = await sqlConfig.query(query, [merchantId]);
         return result.rows;
     },
 
@@ -294,7 +294,7 @@ export const inventoryRepository = {
     getMerchantStockMovements: async (merchantId: string, filters: { startDate?: Date, endDate?: Date }): Promise<StockMovement[]> => {
         // Join StockMovements with Products to filter by merchant_id
         let query = `
-      SELECT sm.* 
+      SELECT sm.*, sm.created_at AS date, p.name AS product_name
       FROM StockMovements sm
       JOIN Products p ON sm.product_id = p.id
       WHERE p.merchant_id = $1
@@ -307,7 +307,7 @@ export const inventoryRepository = {
             values.push(filters.startDate);
         }
         if (filters.endDate) {
-            query += ` AND sm.created_at <= $${paramCount++}`;
+            query += ` AND sm.created_at < ($${paramCount++}::date + interval '1 day')`;
             values.push(filters.endDate);
         }
 
@@ -320,11 +320,11 @@ export const inventoryRepository = {
     createProduct: async (product: any): Promise<any> => {
         const query = `
             INSERT INTO Products (
-                id, merchant_id, name, description, price, quantity, 
-                category_id, imageurl, sku, low_stock_threshold, 
+                id, merchant_id, name, description, price, quantity,
+                category_id, supplier_id, imageurl, sku, low_stock_threshold,
                 bestseller, new
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
             RETURNING *
         `;
 
@@ -336,7 +336,8 @@ export const inventoryRepository = {
             product.price,
             product.quantity,
             product.category_id,
-            product.image_url, // Note: DB column is 'imageurl' based on migration check
+            product.supplier_id,
+            product.image_url,
             product.sku,
             product.low_stock_threshold,
             product.bestseller,

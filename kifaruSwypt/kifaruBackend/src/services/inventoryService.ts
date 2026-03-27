@@ -76,13 +76,10 @@ export const inventoryService = {
     },
 
     checkLowStock: async (merchantId: string): Promise<void> => {
-        // Find products below threshold
         const products = await inventoryRepository.getLowStockProducts(merchantId);
 
         for (const product of products) {
-            // Threshold is hardcoded 10 in repo default, or passed.
-            // Trigger alert
-            await alertService.triggerLowStockAlert(merchantId, product.id, product.quantity, 10);
+            await alertService.triggerLowStockAlert(merchantId, product.id, product.quantity, product.low_stock_threshold ?? 10);
         }
     }
 };

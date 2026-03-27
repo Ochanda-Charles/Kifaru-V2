@@ -4,6 +4,7 @@ import { alertRepository } from '../repositories/alertRepository';
 import { adjustStockSchema, getMovementsQuerySchema, getReportQuerySchema } from '../validators/inventoryValidators';
 import { ExtendedUserRequest } from '../middlewares/VerifyToken';
 import { StockMovementType } from '../interfaces/inventoryInterface';
+import { alertService } from '../services/alertService';
 
 
 export const adjustStock = async (req: ExtendedUserRequest, res: Response) => {
@@ -28,6 +29,24 @@ export const adjustStock = async (req: ExtendedUserRequest, res: Response) => {
             change,
             { type: movement_type, reason, reference_id, performed_by }
         );
+
+        // Trigger low stock alert if the new quantity falls at or below threshold
+        try {
+            const product = await inventoryRepository.getProductById(product_id);
+            if (product && product.merchant_id) {
+                const threshold = product.low_stock_threshold ?? 10;
+                if (product.quantity <= threshold) {
+                    await alertService.triggerLowStockAlert(
+                        product.merchant_id,
+                        product_id,
+                        product.quantity,
+                        threshold
+                    );
+                }
+            }
+        } catch (alertErr) {
+            console.error('Failed to trigger low stock alert:', alertErr);
+        }
 
         return res.status(200).json({ success: true, data: movement });
     } catch (err: any) {
@@ -110,7 +129,21 @@ export const getAlerts = async (req: ExtendedUserRequest, res: Response) => {
             return res.status(401).json({ success: false, error: 'Unauthorized' });
         }
 
-        const alerts = await alertRepository.getAlertsByMerchant(merchant_id);
+        // Query live product data instead of the InventoryAlerts table.
+        // The alerts table was never populated because adjustStock and
+        // processCheckout call the repository directly, bypassing the
+        // service layer that creates alert records.
+        const lowStockProducts = await inventoryRepository.getLowStockProducts(merchant_id);
+
+        const alerts = lowStockProducts.map((p: any) => ({
+            id: p.id,
+            product_id: p.id,
+            product_name: p.name,
+            current_quantity: p.quantity,
+            threshold: p.low_stock_threshold ?? 10,
+            created_at: p.updated_at || p.created_at,
+        }));
+
         return res.status(200).json({ success: true, data: alerts });
     } catch (err: any) {
         console.error('Error in getAlerts:', err);

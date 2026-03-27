@@ -262,20 +262,21 @@ const MerchantPOS = () => {
                                     itemLayout="horizontal"
                                     dataSource={cart}
                                     renderItem={(item) => (
-                                        <List.Item actions={[
-                                            <Button key="minus" size="small" icon={<MinusOutlined />} onClick={() => updateQuantity(item.product.id, -1)} />,
-                                            <Text key="qty">{item.quantity}</Text>,
-                                            <Button key="plus" size="small" icon={<PlusOutlined />} onClick={() => updateQuantity(item.product.id, 1)} />,
-                                            <Button key="del" size="small" danger icon={<DeleteOutlined />} onClick={() => removeItem(item.product.id)} />
-                                        ]}>
+                                        <List.Item
+                                            extra={
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                                    <Button size="small" icon={<MinusOutlined />} onClick={() => updateQuantity(item.product.id, -1)} />
+                                                    <Text strong style={{ minWidth: 20, textAlign: 'center' }}>{item.quantity}</Text>
+                                                    <Button size="small" icon={<PlusOutlined />} onClick={() => updateQuantity(item.product.id, 1)} />
+                                                    <Button size="small" danger icon={<DeleteOutlined />} onClick={() => removeItem(item.product.id)} />
+                                                </div>
+                                            }
+                                        >
                                             <List.Item.Meta
                                                 avatar={<Avatar src={item.product.imageUrl} shape="square" size="large" />}
                                                 title={item.product.name}
-                                                description={`@ ${Number(item.product.price).toLocaleString()}`}
+                                                description={`KES ${Number(item.product.price).toLocaleString()} × ${item.quantity} = KES ${(Number(item.product.price) * item.quantity).toLocaleString()}`}
                                             />
-                                            <div style={{ fontWeight: 'bold' }}>
-                                                {(Number(item.product.price) * item.quantity).toLocaleString()}
-                                            </div>
                                         </List.Item>
                                     )}
                                 />

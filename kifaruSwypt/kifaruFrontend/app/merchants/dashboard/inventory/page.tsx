@@ -209,7 +209,18 @@ const InventoryDashboard: React.FC = () => {
             title: "Date",
             dataIndex: "date",
             key: "date",
-            render: (date: string) => new Date(date).toLocaleDateString(),
+            render: (date: string) => {
+                const d = new Date(date);
+                if (isNaN(d.getTime())) return "—";
+                return d.toLocaleString("en-KE", {
+                    year: "numeric",
+                    month: "short",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit",
+                });
+            },
         },
         {
             title: "Product",

@@ -109,9 +109,9 @@ const AddProductPage: React.FC = () => {
                 supplier_id: values.supplierId,
                 image_url: imageUrl,
                 sku: values.sku,
-                low_stock_threshold: values.lowStockThreshold || 10,
-                bestseller: values.bestseller || false,
-                new: values.new || true,
+                low_stock_threshold: values.lowStockThreshold ?? 10,
+                bestseller: values.bestseller ?? false,
+                new: values.new ?? true,
             };
 
             await api.post("/inventory/products", payload);

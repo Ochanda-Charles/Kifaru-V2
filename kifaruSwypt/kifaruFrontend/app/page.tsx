@@ -287,7 +287,7 @@ const Header: React.FC<HeaderProps & { isMobileMenuOpen: boolean; setIsMobileMen
             </div>
           </div>
           <div>
-            <h1 className="text-xl font-black text-gray-900 tracking-tight">Kifaru Swypt</h1>
+            <h1 className="text-xl font-black text-gray-900 tracking-tight">Kifaru</h1>
             <p className="text-green-600 text-[10px] font-bold leading-none">VIRTUAL POS</p>
           </div>
         </div>
@@ -455,7 +455,7 @@ const Footer: React.FC = () => (
               <span className="text-green-600 font-black text-xl">K</span>
             </div>
             <div>
-              <h3 className="text-2xl font-black">Kifaru Swypt</h3>
+              <h3 className="text-2xl font-black">Kifaru</h3>
               <p className="text-green-200 text-sm">Empowering merchants with Stablecoin payments</p>
             </div>
           </div>
@@ -484,7 +484,7 @@ const Footer: React.FC = () => (
       </div>
       <div className="border-t border-white/20 mt-10 pt-8 flex flex-col md:flex-row items-center justify-between">
         <p className="text-green-100 text-sm mb-4 md:mb-0">
-          © 2024 Kifaru Swypt. Empowering global commerce through blockchain technology.
+          © 2024 Kifaru. Empowering global commerce through blockchain technology.
         </p>
         <div className="flex items-center gap-2">
           <span className="text-green-200 text-sm">Secure payments powered by</span>
@@ -737,7 +737,7 @@ const KifaruBeautyStore: React.FC = () => {
               Ready to transform your business?
             </h2>
             <p className="text-xl text-green-50 mb-10 leading-relaxed">
-              Join thousands of merchants who are growing their business and accepting global payments with Kifaru Swypt.
+              Join thousands of merchants who are growing their business and accepting global payments with Kifaru.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link
