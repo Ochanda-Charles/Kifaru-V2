@@ -1,4 +1,4 @@
 {
-  "installCommand": "cd kifaruSwypt/kifaruFrontend && pnpm install --frozen-lockfile",
-  "buildCommand": "cd kifaruSwypt/kifaruFrontend && pnpm build"
+  "installCommand": "pnpm install --frozen-lockfile",
+  "buildCommand": "pnpm build"
 }
