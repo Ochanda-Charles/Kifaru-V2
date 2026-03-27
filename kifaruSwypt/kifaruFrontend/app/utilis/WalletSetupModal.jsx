@@ -6,7 +6,7 @@ import api from "@/app/utilis/api";
 
 const { Text, Title } = Typography;
 
-const WalletSetupModal = ({ visible, onClose, onSubmit, merchant_id, currentWallet }) => {
+const WalletSetupModal = ({ visible, onClose, onSubmit, merchant_id, currentWallet = "" }) => {
   const [wallet_address, setWalletAddress] = useState("");
   const [switching, setSwitching] = useState(false);
 
