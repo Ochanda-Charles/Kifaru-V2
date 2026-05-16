@@ -1,6 +1,4 @@
 [build]
-builder = "nixpacks"
-buildCommand = "cd kifaruSwypt/kifaruBackend && npm install && npm run build"
+builder = "dockerfile"
+dockerfilePath = "kifaruSwypt/kifaruBackend/Dockerfile"
 
-[deploy]
-startCommand = "cd kifaruSwypt/kifaruBackend && npm start"
