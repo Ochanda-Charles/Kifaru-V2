@@ -18,6 +18,13 @@ app.use(cors({
 
 app.use(bodyParser.urlencoded({ extended: true }));
 
+app.get('/api/health', (req: Request, res: Response) => {
+    res.status(200).json({
+        status: 'ok',
+        service: 'kifaru-backend',
+        uptime: process.uptime()
+    });
+});
 
 app.use('/api', router);
 app.use('/api/inventory', inventoryRoutes);

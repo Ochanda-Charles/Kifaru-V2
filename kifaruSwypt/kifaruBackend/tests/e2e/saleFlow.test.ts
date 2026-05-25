@@ -66,7 +66,7 @@ describe('E2E Sale Flow', () => {
         // In a real app, there might be a /sales endpoint that internally calls inventoryService
         // Here we simulate the inventory side of the sale.
         const saleResponse = await request(app)
-            .post('/inventory/adjust')
+            .post('/api/inventory/adjust')
             .send({
                 product_id: productId,
                 quantity: 5,
